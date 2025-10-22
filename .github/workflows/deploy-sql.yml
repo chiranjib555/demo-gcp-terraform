@@ -151,10 +151,14 @@ jobs:
           gcloud compute scp infra/scripts/init-database.sql $VM_NAME:/tmp/init-database.sql \
             --tunnel-through-iap
           
-          # Copy script from VM into the container
+          # Copy script from VM into the container and fix permissions for mssql user (UID 10001)
           echo "=== Copying script into container ==="
           gcloud compute ssh $VM_NAME --tunnel-through-iap \
-            --command "sudo docker cp /tmp/init-database.sql $CONTAINER_NAME:/tmp/init-database.sql"
+            --command "set -euo pipefail; \ 
+              sudo docker cp /tmp/init-database.sql $CONTAINER_NAME:/tmp/init-database.sql; \ 
+              sudo docker exec $CONTAINER_NAME chown 10001:0 /tmp/init-database.sql; \ 
+              sudo docker exec $CONTAINER_NAME chmod 640 /tmp/init-database.sql; \ 
+              sudo docker exec $CONTAINER_NAME ls -l /tmp/init-database.sql"
           
           # Run init script with variable substitution inside the container
           echo "=== Running database initialization (idempotent) ==="
