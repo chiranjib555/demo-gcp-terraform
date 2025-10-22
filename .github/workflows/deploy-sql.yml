@@ -42,8 +42,38 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Configure SSH for OS Login
+      - name: Verify Authentication and Permissions
+        env:
+          CLOUDSDK_CORE_DISABLE_PROMPTS: "1"
         run: |
+          echo "=== Verifying GCP Authentication ==="
+          gcloud auth list
+          gcloud config list
+          
+          echo ""
+          echo "=== Checking Service Account Permissions ==="
+          gcloud projects get-iam-policy $GCP_PROJECT_ID \
+            --flatten="bindings[].members" \
+            --filter="bindings.members:serviceAccount:github-actions-deployer@${GCP_PROJECT_ID}.iam.gserviceaccount.com" \
+            --format="table(bindings.role)" || true
+          
+          echo ""
+          echo "=== Checking OS Login Profile ==="
+          gcloud compute os-login describe-profile --project="$GCP_PROJECT_ID" || echo "OS Login profile not found"
+          
+          echo ""
+          echo "=== Checking VM Status ==="
+          gcloud compute instances describe $VM_NAME \
+            --zone=$GCP_ZONE \
+            --project=$GCP_PROJECT_ID \
+            --format="value(status,metadata.items[key=enable-oslogin].value)" || true
+
+      - name: Configure SSH for OS Login
+        env:
+          CLOUDSDK_CORE_DISABLE_PROMPTS: "1"
+        run: |
+          echo "=== Configuring SSH for OS Login ==="
+          
           # Create .ssh directory
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
@@ -54,15 +84,27 @@ jobs:
           chmod 600 ~/.ssh/google_compute_engine
           chmod 644 ~/.ssh/google_compute_engine.pub
           
+          echo "SSH key generated:"
+          ls -la ~/.ssh/google_compute_engine*
+          
           # Add SSH key to OS Login with 1 hour TTL
+          echo ""
           echo "Adding SSH key to OS Login..."
           gcloud compute os-login ssh-keys add \
             --key-file ~/.ssh/google_compute_engine.pub \
-            --ttl=3600s
+            --ttl=3600s \
+            --project="$GCP_PROJECT_ID"
           
           # Get the OS Login username
-          OS_LOGIN_USER=$(gcloud compute os-login describe-profile --format="value(posixAccounts[0].username)")
+          echo ""
+          echo "Getting OS Login username..."
+          OS_LOGIN_USER=$(gcloud compute os-login describe-profile --format="value(posixAccounts[0].username)" --project="$GCP_PROJECT_ID")
           echo "OS Login username: $OS_LOGIN_USER"
+          
+          # List registered SSH keys
+          echo ""
+          echo "Registered SSH keys:"
+          gcloud compute os-login ssh-keys list --project="$GCP_PROJECT_ID" || echo "No keys found"
           
           # Configure SSH to bypass host key checking and use correct settings
           cat > ~/.ssh/config <<EOF
@@ -74,6 +116,7 @@ jobs:
           EOF
           chmod 600 ~/.ssh/config
           
+          echo ""
           echo "SSH configuration complete!"
 
       - name: Deploy or Manage SQL Server Container
@@ -95,13 +138,35 @@ jobs:
           echo "SSH key verified at: ~/.ssh/google_compute_engine"
           ls -la ~/.ssh/
           
+          # Test SSH connection first with troubleshooting
+          echo ""
+          echo "=== Testing SSH Connection ==="
+          if ! gcloud compute ssh $VM_NAME \
+            --project=$GCP_PROJECT_ID \
+            --zone=$GCP_ZONE \
+            --tunnel-through-iap \
+            --command "echo 'SSH connection successful!'" 2>&1; then
+            
+            echo ""
+            echo "SSH connection failed. Running troubleshooter..."
+            gcloud compute ssh $VM_NAME \
+              --project=$GCP_PROJECT_ID \
+              --zone=$GCP_ZONE \
+              --tunnel-through-iap \
+              --troubleshoot || true
+            exit 1
+          fi
+          
+          echo ""
+          echo "=== SSH Connection Verified! ==="
+          echo ""
+          
           # SSH via IAP tunnel - no public SSH needed!
           # This command creates a tunnel through Google's IAP proxy
           IAP_SSH="gcloud compute ssh $VM_NAME \
             --project=$GCP_PROJECT_ID \
             --zone=$GCP_ZONE \
             --tunnel-through-iap \
-            --strict-host-key-checking=no \
             --command"
           
           if [ "$ACTION" = "stop" ]; then
