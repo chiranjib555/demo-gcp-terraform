@@ -42,6 +42,18 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
+      - name: Generate SSH Keys for OS Login
+        run: |
+          # Generate SSH key if it doesn't exist
+          if [ ! -f ~/.ssh/google_compute_engine ]; then
+            ssh-keygen -t rsa -f ~/.ssh/google_compute_engine -C "github-actions" -N ""
+          fi
+          
+          # Add SSH key to service account for OS Login
+          gcloud compute os-login ssh-keys add \
+            --key-file ~/.ssh/google_compute_engine.pub \
+            --ttl 1h
+
       - name: Deploy or Manage SQL Server Container
         env:
           SA_PASSWORD: ${{ secrets.SQL_SA_PASSWORD }}
