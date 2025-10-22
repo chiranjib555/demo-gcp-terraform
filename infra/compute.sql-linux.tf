@@ -74,9 +74,9 @@ resource "google_compute_instance" "sqlvm" {
     on_host_maintenance = "MIGRATE"
   }
 
-  # Default compute SA with minimal scopes (fine for demo)
+  # Dedicated VM runtime service account with minimal permissions
   service_account {
-    email = "default"
+    email = google_service_account.vm_runtime.email
     scopes = [
       "https://www.googleapis.com/auth/logging.write",
       "https://www.googleapis.com/auth/monitoring.write",
