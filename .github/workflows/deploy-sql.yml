@@ -159,7 +159,7 @@ jobs:
           # Run init script with variable substitution inside the container
           echo "=== Running database initialization (idempotent) ==="
           gcloud compute ssh $VM_NAME --tunnel-through-iap \
-            --command "sudo docker exec -i $CONTAINER_NAME /opt/mssql-tools18/bin/sqlcmd \
+            --command "sudo docker exec $CONTAINER_NAME /opt/mssql-tools18/bin/sqlcmd \
               -S localhost -U SA -P '$SA_PASSWORD' -C -b \
               -v CI_PASSWORD='$CI_PASSWORD' \
               -v VERSION='\$(date +%Y%m%d-%H%M%S)' \
