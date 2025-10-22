@@ -48,21 +48,33 @@ jobs:
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
           
-          # Generate SSH key non-interactively
+          # Generate SSH key non-interactively with the exact name gcloud expects
+          echo "Generating SSH key..."
           ssh-keygen -t rsa -b 2048 -f ~/.ssh/google_compute_engine -N "" -q
+          chmod 600 ~/.ssh/google_compute_engine
+          chmod 644 ~/.ssh/google_compute_engine.pub
           
           # Add SSH key to OS Login with 1 hour TTL
+          echo "Adding SSH key to OS Login..."
           gcloud compute os-login ssh-keys add \
             --key-file ~/.ssh/google_compute_engine.pub \
             --ttl=3600s
           
-          # Configure SSH to bypass host key checking for this session
-          cat >> ~/.ssh/config <<EOF
-          Host compute.*
+          # Get the OS Login username
+          OS_LOGIN_USER=$(gcloud compute os-login describe-profile --format="value(posixAccounts[0].username)")
+          echo "OS Login username: $OS_LOGIN_USER"
+          
+          # Configure SSH to bypass host key checking and use correct settings
+          cat > ~/.ssh/config <<EOF
+          Host *
               StrictHostKeyChecking no
               UserKnownHostsFile /dev/null
+              IdentityFile ~/.ssh/google_compute_engine
+              LogLevel ERROR
           EOF
           chmod 600 ~/.ssh/config
+          
+          echo "SSH configuration complete!"
 
       - name: Deploy or Manage SQL Server Container
         env:
@@ -72,6 +84,12 @@ jobs:
         run: |
           echo "=== Action: $ACTION ==="
           
+          # Verify SSH key exists
+          if [ ! -f ~/.ssh/google_compute_engine ]; then
+            echo "ERROR: SSH key not found!"
+            exit 1
+          fi
+          
           # SSH via IAP tunnel - no public SSH needed!
           # This command creates a tunnel through Google's IAP proxy
           IAP_SSH="gcloud compute ssh $VM_NAME \
@@ -79,6 +97,7 @@ jobs:
             --zone=$GCP_ZONE \
             --tunnel-through-iap \
             --strict-host-key-checking=no \
+            --quiet \
             --command"
           
           if [ "$ACTION" = "stop" ]; then
@@ -139,7 +158,8 @@ jobs:
             --project=$GCP_PROJECT_ID \
             --zone=$GCP_ZONE \
             --tunnel-through-iap \
-            --strict-host-key-checking=no
+            --strict-host-key-checking=no \
+            --quiet
           
           # Run init script with variable substitution
           $IAP_SSH "sudo docker exec -i $CONTAINER_NAME /opt/mssql-tools18/bin/sqlcmd \
@@ -169,4 +189,5 @@ jobs:
             --zone=$GCP_ZONE \
             --tunnel-through-iap \
             --strict-host-key-checking=no \
+            --quiet \
             --command "rm -f /tmp/init-database.sql" || true
