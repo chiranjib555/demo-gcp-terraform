@@ -42,17 +42,27 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Generate SSH Keys for OS Login
+      - name: Configure SSH for OS Login
         run: |
-          # Generate SSH key if it doesn't exist
-          if [ ! -f ~/.ssh/google_compute_engine ]; then
-            ssh-keygen -t rsa -f ~/.ssh/google_compute_engine -C "github-actions" -N ""
-          fi
+          # Create .ssh directory
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
           
-          # Add SSH key to service account for OS Login
+          # Generate SSH key non-interactively
+          ssh-keygen -t rsa -b 2048 -f ~/.ssh/google_compute_engine -N "" -q
+          
+          # Add SSH key to OS Login with 1 hour TTL
           gcloud compute os-login ssh-keys add \
             --key-file ~/.ssh/google_compute_engine.pub \
-            --ttl 1h
+            --ttl=3600s
+          
+          # Configure SSH to bypass host key checking for this session
+          cat >> ~/.ssh/config <<EOF
+          Host compute.*
+              StrictHostKeyChecking no
+              UserKnownHostsFile /dev/null
+          EOF
+          chmod 600 ~/.ssh/config
 
       - name: Deploy or Manage SQL Server Container
         env:
@@ -68,6 +78,7 @@ jobs:
             --project=$GCP_PROJECT_ID \
             --zone=$GCP_ZONE \
             --tunnel-through-iap \
+            --strict-host-key-checking=no \
             --command"
           
           if [ "$ACTION" = "stop" ]; then
@@ -127,7 +138,8 @@ jobs:
           gcloud compute scp infra/scripts/init-database.sql $VM_NAME:/tmp/init-database.sql \
             --project=$GCP_PROJECT_ID \
             --zone=$GCP_ZONE \
-            --tunnel-through-iap
+            --tunnel-through-iap \
+            --strict-host-key-checking=no
           
           # Run init script with variable substitution
           $IAP_SSH "sudo docker exec -i $CONTAINER_NAME /opt/mssql-tools18/bin/sqlcmd \
@@ -156,4 +168,5 @@ jobs:
             --project=$GCP_PROJECT_ID \
             --zone=$GCP_ZONE \
             --tunnel-through-iap \
+            --strict-host-key-checking=no \
             --command "rm -f /tmp/init-database.sql" || true
