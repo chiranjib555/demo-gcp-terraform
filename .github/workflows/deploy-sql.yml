@@ -87,10 +87,20 @@ jobs:
           # Deploy action
           echo "=== Deploying SQL Server 2022 ==="
           
-          # Check if container exists and remove it
-          echo "Checking for existing container..."
+          # Pull latest image
+          echo "Pulling SQL Server image..."
           gcloud compute ssh $VM_NAME --tunnel-through-iap \
-            --command "sudo docker stop $CONTAINER_NAME 2>/dev/null || true; sudo docker rm $CONTAINER_NAME 2>/dev/null || true"
+            --command "sudo docker pull mcr.microsoft.com/mssql/server:$SQL_VERSION"
+          
+          # Ensure correct permissions on persistent volume (idempotent)
+          echo "Setting correct permissions on /mnt/sqldata..."
+          gcloud compute ssh $VM_NAME --tunnel-through-iap \
+            --command "sudo chown -R 10001:0 /mnt/sqldata && sudo chmod -R 770 /mnt/sqldata"
+          
+          # Stop and remove existing container if present
+          echo "Removing existing container if present..."
+          gcloud compute ssh $VM_NAME --tunnel-through-iap \
+            --command "sudo docker rm -f $CONTAINER_NAME 2>/dev/null || true"
           
           # Deploy SQL Server container with persistent storage
           echo "Starting new SQL Server container..."
@@ -98,25 +108,41 @@ jobs:
             --command "sudo docker run -d \
               --name $CONTAINER_NAME \
               --hostname sqlserver \
-              -e ACCEPT_EULA=Y \
-              -e 'MSSQL_SA_PASSWORD=$SA_PASSWORD' \
-              -e MSSQL_PID=Developer \
-              -p 1433:1433 \
-              -v /mnt/sqldata/data:/var/opt/mssql/data \
-              -v /mnt/sqldata/log:/var/opt/mssql/log \
-              -v /mnt/sqldata/secrets:/var/opt/mssql/secrets \
               --restart unless-stopped \
+              -e ACCEPT_EULA=Y \
+              -e MSSQL_PID=Developer \
+              -e 'MSSQL_SA_PASSWORD=$SA_PASSWORD' \
+              -p 1433:1433 \
+              -v /mnt/sqldata:/var/opt/mssql \
               mcr.microsoft.com/mssql/server:$SQL_VERSION"
           
-          # Wait for SQL Server to be ready
-          echo "Waiting for SQL Server to start (max 60 seconds)..."
-          for i in {1..12}; do
-            if gcloud compute ssh $VM_NAME --tunnel-through-iap \
-              --command "sudo docker exec $CONTAINER_NAME /opt/mssql-tools18/bin/sqlcmd -S localhost -U SA -P '$SA_PASSWORD' -C -Q 'SELECT 1' &>/dev/null"; then
-              echo "SQL Server is ready!"
+          # Wait for SQL Server to be ready (up to 5 minutes)
+          echo "Waiting for SQL Server to become healthy (max 5 minutes)..."
+          for i in $(seq 1 60); do
+            # Check container health status first
+            STATUS=\$(gcloud compute ssh $VM_NAME --tunnel-through-iap \
+              --command "sudo docker inspect -f '{{.State.Health.Status}}' $CONTAINER_NAME 2>/dev/null || echo 'unknown'")
+            
+            if [ "\$STATUS" = "healthy" ]; then
+              echo "✅ SQL Server is healthy!"
               break
             fi
-            echo "Waiting... ($i/12)"
+            
+            # Fallback: try simple query
+            if gcloud compute ssh $VM_NAME --tunnel-through-iap \
+              --command "sudo docker exec $CONTAINER_NAME /opt/mssql-tools18/bin/sqlcmd -S localhost -U SA -P '$SA_PASSWORD' -C -Q 'SELECT 1' >/dev/null 2>&1"; then
+              echo "✅ SQL Server is responding!"
+              break
+            fi
+            
+            if [ \$i -eq 60 ]; then
+              echo "❌ SQL Server not healthy after 5 minutes. Last logs:"
+              gcloud compute ssh $VM_NAME --tunnel-through-iap \
+                --command "sudo docker logs --tail=200 $CONTAINER_NAME" || true
+              exit 1
+            fi
+            
+            echo "Waiting... (\$i/60)"
             sleep 5
           done
           
@@ -126,10 +152,10 @@ jobs:
             --tunnel-through-iap
           
           # Run init script with variable substitution
-          echo "=== Running database initialization ==="
+          echo "=== Running database initialization (idempotent) ==="
           gcloud compute ssh $VM_NAME --tunnel-through-iap \
             --command "sudo docker exec -i $CONTAINER_NAME /opt/mssql-tools18/bin/sqlcmd \
-              -S localhost -U SA -P '$SA_PASSWORD' -C \
+              -S localhost -U SA -P '$SA_PASSWORD' -C -b \
               -v CI_PASSWORD='$CI_PASSWORD' \
               -v VERSION='\$(date +%Y%m%d-%H%M%S)' \
               -i /tmp/init-database.sql"
@@ -139,13 +165,15 @@ jobs:
           gcloud compute ssh $VM_NAME --tunnel-through-iap \
             --command "sudo docker exec $CONTAINER_NAME /opt/mssql-tools18/bin/sqlcmd \
               -S localhost -U SA -P '$SA_PASSWORD' -C \
-              -Q 'SELECT name, database_id, create_date FROM sys.databases WHERE name = N''DemoDB'';'"
+              -Q 'SELECT name, database_id, create_date FROM sys.databases WHERE name = N''DemoDB''; SELECT name, type_desc FROM sys.database_principals WHERE name = N''ci_user'';'"
           
-          echo "=== Deployment complete! ==="
+          echo ""
+          echo "=== ✅ Deployment complete! ==="
           echo "SQL Server 2022 is running on VM: $VM_NAME"
           echo "Connect via: 34.57.37.222,1433"
           echo "Database: DemoDB"
           echo "User: ci_user"
+          echo "Container status: \$(gcloud compute ssh $VM_NAME --tunnel-through-iap --command 'sudo docker ps --filter name=$CONTAINER_NAME --format \"{{.Status}}\"')"
 
       - name: Clean up
         if: always()

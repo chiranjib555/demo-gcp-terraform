@@ -63,9 +63,11 @@ mkdir -p "$MOUNT_POINT/data"
 mkdir -p "$MOUNT_POINT/log"
 mkdir -p "$MOUNT_POINT/secrets"
 
-# Set permissions (SQL Server container runs as mssql user, UID 10001)
-chown -R 10001:10001 "$MOUNT_POINT"
-chmod -R 755 "$MOUNT_POINT"
+# Set permissions for SQL Server container
+# Container runs as UID 10001 (mssql user), group 0 (root)
+# 770 = rwxrwx--- (owner and group can read/write/execute, others cannot)
+chown -R 10001:0 "$MOUNT_POINT"
+chmod -R 770 "$MOUNT_POINT"
 
 echo "=== VM prep complete! ==="
 echo "Docker version: $(docker --version)"
