@@ -81,6 +81,8 @@ jobs:
           SA_PASSWORD: ${{ secrets.SQL_SA_PASSWORD }}
           CI_PASSWORD: ${{ secrets.SQL_CI_PASSWORD }}
           ACTION: ${{ github.event.inputs.action || 'deploy' }}
+          # Auto-answer yes to any prompts
+          CLOUDSDK_CORE_DISABLE_PROMPTS: "1"
         run: |
           echo "=== Action: $ACTION ==="
           
@@ -90,6 +92,9 @@ jobs:
             exit 1
           fi
           
+          echo "SSH key verified at: ~/.ssh/google_compute_engine"
+          ls -la ~/.ssh/
+          
           # SSH via IAP tunnel - no public SSH needed!
           # This command creates a tunnel through Google's IAP proxy
           IAP_SSH="gcloud compute ssh $VM_NAME \
@@ -97,7 +102,6 @@ jobs:
             --zone=$GCP_ZONE \
             --tunnel-through-iap \
             --strict-host-key-checking=no \
-            --quiet \
             --command"
           
           if [ "$ACTION" = "stop" ]; then
@@ -182,6 +186,8 @@ jobs:
 
       - name: Clean up
         if: always()
+        env:
+          CLOUDSDK_CORE_DISABLE_PROMPTS: "1"
         run: |
           # Remove temporary files
           gcloud compute ssh $VM_NAME \
@@ -189,5 +195,4 @@ jobs:
             --zone=$GCP_ZONE \
             --tunnel-through-iap \
             --strict-host-key-checking=no \
-            --quiet \
             --command "rm -f /tmp/init-database.sql" || true
