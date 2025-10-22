@@ -1,0 +1,15 @@
+# CODEOWNERS file for automatic PR reviewer assignment
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Global rule - repository owner reviews all changes
+* @chiranjib555
+
+# Terraform configuration files
+*.tf @chiranjib555
+*.tfvars @chiranjib555
+
+# Documentation
+*.md @chiranjib555
+
+# GitHub workflows and configurations
+.github/** @chiranjib555
