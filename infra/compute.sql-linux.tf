@@ -62,7 +62,7 @@ resource "google_compute_instance" "sqlvm" {
     startup-script = templatefile("${path.module}/scripts/vm-prep.sh.tftpl", {
       device_name = "sql-data"
     })
-    enable-oslogin = "TRUE" # Required for IAP SSH tunneling
+    enable-oslogin = "FALSE" # DISABLED - Use metadata-based SSH keys for simpler IAP access
   }
 
   # Allow stopping for updates (needed for disk attachment and metadata changes)
