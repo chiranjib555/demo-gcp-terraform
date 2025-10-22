@@ -1,0 +1,73 @@
+#!/bin/bash
+set -euo pipefail
+
+echo "=== VM Prep Script - Installing Docker and mounting persistent disk ==="
+
+# Update system packages
+apt-get update
+apt-get install -y ca-certificates curl gnupg lsblk
+
+# Install Docker
+install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+chmod a+r /etc/apt/keyrings/docker.gpg
+
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian \
+  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+  tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+apt-get update
+apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+# Start Docker service
+systemctl enable docker
+systemctl start docker
+
+# Mount persistent disk for SQL Server data
+DEVICE_NAME="${device_name}"
+MOUNT_POINT="/mnt/sqldata"
+
+echo "=== Configuring persistent disk ==="
+
+# Find the device (GCP attaches as /dev/disk/by-id/google-*)
+DEVICE_PATH="/dev/disk/by-id/google-$DEVICE_NAME"
+
+if [ ! -e "$DEVICE_PATH" ]; then
+  echo "ERROR: Device $DEVICE_PATH not found!"
+  exit 1
+fi
+
+# Create mount point
+mkdir -p "$MOUNT_POINT"
+
+# Check if already formatted (has a filesystem)
+if ! blkid "$DEVICE_PATH"; then
+  echo "Formatting disk with ext4..."
+  mkfs.ext4 -m 0 -E lazy_itable_init=0,lazy_journal_init=0,discard "$DEVICE_PATH"
+fi
+
+# Mount the disk
+if ! mountpoint -q "$MOUNT_POINT"; then
+  echo "Mounting $DEVICE_PATH to $MOUNT_POINT"
+  mount -o discard,defaults "$DEVICE_PATH" "$MOUNT_POINT"
+fi
+
+# Add to fstab if not already present (for auto-mount on reboot)
+if ! grep -q "$MOUNT_POINT" /etc/fstab; then
+  echo "UUID=$(blkid -s UUID -o value $DEVICE_PATH) $MOUNT_POINT ext4 discard,defaults,nofail 0 2" >> /etc/fstab
+fi
+
+# Create SQL Server data directories
+mkdir -p "$MOUNT_POINT/data"
+mkdir -p "$MOUNT_POINT/log"
+mkdir -p "$MOUNT_POINT/secrets"
+
+# Set permissions (SQL Server container runs as mssql user, UID 10001)
+chown -R 10001:10001 "$MOUNT_POINT"
+chmod -R 755 "$MOUNT_POINT"
+
+echo "=== VM prep complete! ==="
+echo "Docker version: $(docker --version)"
+echo "Persistent disk mounted at: $MOUNT_POINT"
+echo "Ready for SQL Server container deployment via GitHub Actions"

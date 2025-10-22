@@ -1,0 +1,147 @@
+name: Deploy SQL Server to GCP
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to perform'
+        required: true
+        type: choice
+        options:
+          - deploy
+          - restart
+          - stop
+        default: 'deploy'
+  push:
+    branches:
+      - main
+    paths:
+      - 'infra/scripts/init-database.sql'
+      - '.github/workflows/deploy-sql.yml'
+
+env:
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GCP_ZONE: us-central1-a
+  VM_NAME: sql-linux-vm
+  CONTAINER_NAME: mssql
+  SQL_VERSION: "2022-latest"
+
+jobs:
+  deploy-sql-server:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy or Manage SQL Server Container
+        env:
+          SA_PASSWORD: ${{ secrets.SQL_SA_PASSWORD }}
+          CI_PASSWORD: ${{ secrets.SQL_CI_PASSWORD }}
+          ACTION: ${{ github.event.inputs.action || 'deploy' }}
+        run: |
+          echo "=== Action: $ACTION ==="
+          
+          # SSH via IAP tunnel - no public SSH needed!
+          # This command creates a tunnel through Google's IAP proxy
+          IAP_SSH="gcloud compute ssh $VM_NAME \
+            --project=$GCP_PROJECT_ID \
+            --zone=$GCP_ZONE \
+            --tunnel-through-iap \
+            --command"
+          
+          if [ "$ACTION" = "stop" ]; then
+            echo "Stopping SQL Server container..."
+            $IAP_SSH "sudo docker stop $CONTAINER_NAME || true"
+            exit 0
+          fi
+          
+          if [ "$ACTION" = "restart" ]; then
+            echo "Restarting SQL Server container..."
+            $IAP_SSH "sudo docker restart $CONTAINER_NAME"
+            exit 0
+          fi
+          
+          # Deploy action
+          echo "=== Deploying SQL Server 2022 ==="
+          
+          # Check if container exists
+          CONTAINER_EXISTS=$($IAP_SSH "sudo docker ps -a -q -f name=$CONTAINER_NAME" || echo "")
+          
+          if [ -n "$CONTAINER_EXISTS" ]; then
+            echo "Container exists, removing old container..."
+            $IAP_SSH "sudo docker stop $CONTAINER_NAME || true"
+            $IAP_SSH "sudo docker rm $CONTAINER_NAME || true"
+          fi
+          
+          # Deploy SQL Server container with persistent storage
+          echo "Starting new SQL Server container..."
+          $IAP_SSH "sudo docker run -d \
+            --name $CONTAINER_NAME \
+            --hostname sqlserver \
+            -e ACCEPT_EULA=Y \
+            -e MSSQL_SA_PASSWORD='$SA_PASSWORD' \
+            -e MSSQL_PID=Developer \
+            -p 1433:1433 \
+            -v /mnt/sqldata/data:/var/opt/mssql/data \
+            -v /mnt/sqldata/log:/var/opt/mssql/log \
+            -v /mnt/sqldata/secrets:/var/opt/mssql/secrets \
+            --restart unless-stopped \
+            mcr.microsoft.com/mssql/server:$SQL_VERSION"
+          
+          # Wait for SQL Server to be ready
+          echo "Waiting for SQL Server to start (max 60 seconds)..."
+          for i in {1..12}; do
+            if $IAP_SSH "sudo docker exec $CONTAINER_NAME /opt/mssql-tools18/bin/sqlcmd -S localhost -U SA -P '$SA_PASSWORD' -C -Q 'SELECT 1' &>/dev/null"; then
+              echo "SQL Server is ready!"
+              break
+            fi
+            echo "Waiting... ($i/12)"
+            sleep 5
+          done
+          
+          # Initialize database
+          echo "=== Running database initialization script ==="
+          
+          # Copy init script to VM
+          gcloud compute scp infra/scripts/init-database.sql $VM_NAME:/tmp/init-database.sql \
+            --project=$GCP_PROJECT_ID \
+            --zone=$GCP_ZONE \
+            --tunnel-through-iap
+          
+          # Run init script with variable substitution
+          $IAP_SSH "sudo docker exec -i $CONTAINER_NAME /opt/mssql-tools18/bin/sqlcmd \
+            -S localhost -U SA -P '$SA_PASSWORD' -C \
+            -v CI_PASSWORD='$CI_PASSWORD' \
+            -v VERSION='$(date +%Y%m%d-%H%M%S)' \
+            -i /tmp/init-database.sql" < <($IAP_SSH "cat /tmp/init-database.sql")
+          
+          # Verify deployment
+          echo "=== Verifying deployment ==="
+          $IAP_SSH "sudo docker exec $CONTAINER_NAME /opt/mssql-tools18/bin/sqlcmd \
+            -S localhost -U SA -P '$SA_PASSWORD' -C \
+            -Q 'SELECT name, database_id, create_date FROM sys.databases WHERE name = N''DemoDB'';'"
+          
+          echo "=== Deployment complete! ==="
+          echo "SQL Server 2022 is running on VM: $VM_NAME"
+          echo "Connect via: <VM_PUBLIC_IP>,1433"
+          echo "Database: DemoDB"
+          echo "User: ci_user"
+
+      - name: Clean up
+        if: always()
+        run: |
+          # Remove temporary files
+          gcloud compute ssh $VM_NAME \
+            --project=$GCP_PROJECT_ID \
+            --zone=$GCP_ZONE \
+            --tunnel-through-iap \
+            --command "rm -f /tmp/init-database.sql" || true
