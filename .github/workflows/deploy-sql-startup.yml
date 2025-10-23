@@ -108,56 +108,36 @@ jobs:
           echo "   Open Cloud Shell: https://console.cloud.google.com"
           echo "   Run: curl -s https://storage.googleapis.com/${GCS_BUCKET}/get-connection-info-cloud.sh | bash"
 
-      - name: Upload startup script to VM metadata (if changed)
+      - name: Deploy SQL Server via SSH
         if: github.event.inputs.action == 'deploy' || github.event.inputs.action == ''
         run: |
           set -euo pipefail
-          echo "=== Updating VM startup script ==="
-          gcloud compute instances add-metadata "$VM_NAME" \
+          echo "=== Deploying SQL Server via SSH ==="
+          
+          # Copy the deployment script to the VM
+          gcloud compute scp scripts/vm-startup.sh "$VM_NAME:/tmp/deploy-sql.sh" \
             --zone "$GCP_ZONE" \
-            --metadata-from-file startup-script=scripts/vm-startup.sh
-          echo "✅ Startup script updated"
-
-      - name: Trigger deployment by resetting VM
-        if: github.event.inputs.action == 'deploy' || github.event.inputs.action == ''
-        run: |
-          set -euo pipefail
-          echo "=== Resetting VM to trigger startup script ==="
-          gcloud compute instances reset "$VM_NAME" --zone "$GCP_ZONE"
-          echo "VM is resetting..."
+            --tunnel-through-iap
+          
+          # Execute the deployment script
+          gcloud compute ssh "$VM_NAME" \
+            --zone "$GCP_ZONE" \
+            --tunnel-through-iap \
+            --command "sudo bash /tmp/deploy-sql.sh"
+          
+          echo "✅ SQL Server deployment completed"
 
       - name: Wait for VM to be ready
         if: github.event.inputs.action == 'deploy' || github.event.inputs.action == ''
         run: |
           set -euo pipefail
-          echo "=== Waiting for VM to boot and run startup script ==="
+          echo "=== Waiting for SQL Server to be ready ==="
           
-          # Wait for VM to be RUNNING
+          # Give SQL Server container a moment to start
+          sleep 10
+          
+          # Check if SQL Server is responding
           for i in {1..30}; do
-            STATUS=$(gcloud compute instances describe "$VM_NAME" \
-              --zone "$GCP_ZONE" \
-              --format="value(status)")
-            
-            if [ "$STATUS" = "RUNNING" ]; then
-              echo "✅ VM is RUNNING"
-              break
-            fi
-            
-            if [ $i -eq 30 ]; then
-              echo "❌ VM did not start within 2.5 minutes"
-              exit 1
-            fi
-            
-            echo "Waiting for VM... ($i/30)"
-            sleep 5
-          done
-          
-          # Give startup script time to complete (usually 1-2 minutes)
-          echo "Waiting for startup script to complete (max 5 minutes)..."
-          sleep 30  # Initial wait for script to start
-          
-          for i in {1..30}; do
-            # Check if we can query the database (means script finished)
             if gcloud compute ssh "$VM_NAME" \
                 --zone "$GCP_ZONE" \
                 --tunnel-through-iap \
@@ -167,9 +147,11 @@ jobs:
             fi
             
             if [ $i -eq 30 ]; then
-              echo "⚠️  Startup script may still be running. Check serial output:"
-              gcloud compute instances get-serial-port-output "$VM_NAME" \
-                --zone "$GCP_ZONE" | tail -50
+              echo "⚠️  SQL Server not responding. Checking logs..."
+              gcloud compute ssh "$VM_NAME" \
+                --zone "$GCP_ZONE" \
+                --tunnel-through-iap \
+                --command "sudo docker logs $CONTAINER_NAME --tail 50"
             fi
             
             echo "Waiting for SQL Server... ($i/30)"

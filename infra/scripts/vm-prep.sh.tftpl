@@ -5,7 +5,7 @@ echo "=== VM Prep Script - Installing Docker and mounting persistent disk ==="
 
 # Update system packages
 apt-get update
-apt-get install -y ca-certificates curl gnupg lsblk
+apt-get install -y ca-certificates curl gnupg
 
 # Install Docker
 install -m 0755 -d /etc/apt/keyrings
