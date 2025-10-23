@@ -84,31 +84,33 @@ jobs:
             terraform init -input=false
             
             echo ""
-            echo "📦 Importing existing resources into Terraform state..."
-            
-            # Import existing resources (ignore errors if already imported or don't exist)
-            terraform import -var="project=$GCP_PROJECT_ID" -var="admin_ip_cidr=0.0.0.0/0" google_compute_address.sqlvm_ip "projects/$GCP_PROJECT_ID/regions/us-central1/addresses/sqlvm-ip" 2>/dev/null || true
-            terraform import -var="project=$GCP_PROJECT_ID" -var="admin_ip_cidr=0.0.0.0/0" google_compute_disk.sql_data "projects/$GCP_PROJECT_ID/zones/us-central1-a/disks/sql-data-disk" 2>/dev/null || true
-            terraform import -var="project=$GCP_PROJECT_ID" -var="admin_ip_cidr=0.0.0.0/0" google_compute_network.vpc "projects/$GCP_PROJECT_ID/global/networks/demo-vpc" 2>/dev/null || true
-            terraform import -var="project=$GCP_PROJECT_ID" -var="admin_ip_cidr=0.0.0.0/0" google_compute_subnetwork.subnet "projects/$GCP_PROJECT_ID/regions/us-central1/subnetworks/demo-subnet" 2>/dev/null || true
-            terraform import -var="project=$GCP_PROJECT_ID" -var="admin_ip_cidr=0.0.0.0/0" google_service_account.vm_runtime "projects/$GCP_PROJECT_ID/serviceAccounts/sql-vm-sa@$GCP_PROJECT_ID.iam.gserviceaccount.com" 2>/dev/null || true
-            
-            echo "✅ Import complete (or resources already in state)"
-            echo ""
             echo "Running terraform apply..."
             
             # Get secrets from Secret Manager
             SQL_SA_PASSWORD=$(gcloud secrets versions access latest --secret="sql-sa-password")
             SQL_CI_PASSWORD=$(gcloud secrets versions access latest --secret="sql-ci-password")
             
-            # Apply with all required variables
-            terraform apply \
-              -target=google_compute_instance.sqlvm \
-              -var="project=$GCP_PROJECT_ID" \
-              -var="admin_ip_cidr=0.0.0.0/0" \
-              -var="sql_sa_password=$SQL_SA_PASSWORD" \
-              -var="sql_admin_password=$SQL_CI_PASSWORD" \
-              -auto-approve
+            # Create terraform.tfvars for this run
+            echo "project = \"$GCP_PROJECT_ID\"" > terraform.auto.tfvars
+            echo "admin_ip_cidr = \"0.0.0.0/0\"" >> terraform.auto.tfvars
+            echo "sql_sa_password = \"$SQL_SA_PASSWORD\"" >> terraform.auto.tfvars
+            echo "sql_admin_password = \"$SQL_CI_PASSWORD\"" >> terraform.auto.tfvars
+            
+            echo ""
+            echo "📦 Importing existing resources into Terraform state..."
+            
+            # Import existing resources (ignore errors if already imported)
+            terraform import google_compute_address.sqlvm_ip "projects/$GCP_PROJECT_ID/regions/us-central1/addresses/sqlvm-ip" 2>/dev/null || echo "  - IP address: already in state or will be created"
+            terraform import google_compute_disk.sql_data "projects/$GCP_PROJECT_ID/zones/us-central1-a/disks/sql-data-disk" 2>/dev/null || echo "  - Disk: already in state or will be created"
+            terraform import google_compute_network.vpc "projects/$GCP_PROJECT_ID/global/networks/demo-vpc" 2>/dev/null || echo "  - VPC: already in state or will be created"
+            terraform import google_compute_subnetwork.subnet "projects/$GCP_PROJECT_ID/regions/us-central1/subnetworks/demo-subnet" 2>/dev/null || echo "  - Subnet: already in state or will be created"
+            terraform import google_service_account.vm_runtime "projects/$GCP_PROJECT_ID/serviceAccounts/sql-vm-sa@$GCP_PROJECT_ID.iam.gserviceaccount.com" 2>/dev/null || echo "  - Service account: already in state or will be created"
+            
+            echo "✅ Import phase complete"
+            echo ""
+            
+            # Apply only the VM instance (dependencies already exist/imported)
+            terraform apply -target=google_compute_instance.sqlvm -auto-approve
             
             echo ""
             echo "✅ VM created successfully!"
