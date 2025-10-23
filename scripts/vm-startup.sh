@@ -43,6 +43,7 @@ log "Secrets fetched successfully"
 
 # Download latest SQL init script from GCS
 log "Downloading init script from GCS..."
+SKIP_INIT=false
 gsutil cp "gs://${GCS_BUCKET}/init-database.sql" /tmp/init-database.sql || {
   log "WARNING: Failed to download init-database.sql, will skip initialization"
   SKIP_INIT=true
@@ -76,7 +77,7 @@ if [ -n "$EXISTING" ]; then
     log "Container is healthy, checking if init script changed..."
     
     # Only re-run init if file timestamp is newer (simple version check)
-    if [ "$SKIP_INIT" != "true" ]; then
+    if [ "${SKIP_INIT}" != "true" ]; then
       log "Running database initialization (idempotent)..."
       docker cp /tmp/init-database.sql "${CONTAINER_NAME}":/tmp/init-database.sql
       docker exec "${CONTAINER_NAME}" chown 10001:0 /tmp/init-database.sql
@@ -140,7 +141,7 @@ for i in {1..60}; do
 done
 
 # Run database initialization
-if [ "$SKIP_INIT" != "true" ]; then
+if [ "${SKIP_INIT}" != "true" ]; then
   log "Running database initialization..."
   docker cp /tmp/init-database.sql "${CONTAINER_NAME}":/tmp/init-database.sql
   docker exec "${CONTAINER_NAME}" chown 10001:0 /tmp/init-database.sql
