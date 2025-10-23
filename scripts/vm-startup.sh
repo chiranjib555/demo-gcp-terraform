@@ -24,22 +24,38 @@ if ! command -v gcloud &> /dev/null; then
   exec -l $SHELL
 fi
 
-# Fetch secrets from Secret Manager
+# Configure gcloud to use the VM's service account
+log "Configuring gcloud authentication..."
+gcloud config set project "${PROJECT_ID}"
+
+# Fetch secrets from Secret Manager using the VM's service account
 log "Fetching secrets from Secret Manager..."
 SA_PASSWORD=$(gcloud secrets versions access latest \
-  --secret=sql-sa-password \
-  --project="${PROJECT_ID}" 2>/dev/null || echo "")
+  --secret=sql-sa-password 2>&1)
 
-CI_PASSWORD=$(gcloud secrets versions access latest \
-  --secret=sql-ci-password \
-  --project="${PROJECT_ID}" 2>/dev/null || echo "")
-
-if [ -z "$SA_PASSWORD" ] || [ -z "$CI_PASSWORD" ]; then
-  log "ERROR: Failed to fetch secrets from Secret Manager"
+if [ $? -ne 0 ]; then
+  log "ERROR: Failed to fetch sql-sa-password from Secret Manager"
+  log "Error details: $SA_PASSWORD"
+  log "VM Service Account: $(gcloud config get-value account)"
+  log "Please ensure vm-runtime@${PROJECT_ID}.iam.gserviceaccount.com has secretmanager.secretAccessor role"
   exit 1
 fi
 
-log "Secrets fetched successfully"
+CI_PASSWORD=$(gcloud secrets versions access latest \
+  --secret=sql-ci-password 2>&1)
+
+if [ $? -ne 0 ]; then
+  log "ERROR: Failed to fetch sql-ci-password from Secret Manager"
+  log "Error details: $CI_PASSWORD"
+  exit 1
+fi
+
+if [ -z "$SA_PASSWORD" ] || [ -z "$CI_PASSWORD" ]; then
+  log "ERROR: Secrets are empty"
+  exit 1
+fi
+
+log "✅ Secrets fetched successfully"
 
 # Download latest SQL init script from GCS
 log "Downloading init script from GCS..."

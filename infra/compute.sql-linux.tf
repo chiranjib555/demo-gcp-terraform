@@ -78,8 +78,7 @@ resource "google_compute_instance" "sqlvm" {
   service_account {
     email = google_service_account.vm_runtime.email
     scopes = [
-      "https://www.googleapis.com/auth/logging.write",
-      "https://www.googleapis.com/auth/monitoring.write",
+      "https://www.googleapis.com/auth/cloud-platform",  # Needed for Secret Manager access
     ]
   }
 }
