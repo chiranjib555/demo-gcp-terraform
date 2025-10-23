@@ -18,7 +18,8 @@ sudo chmod -R 770 "$DATA_DIR"
 echo "[provision] Pulling image..."
 sudo docker pull "$IMAGE"
 
-if sudo docker ps -a --format '{{.Names}}' | grep -q '^mssql$'; then
+EXISTING_CONTAINER=$(sudo docker ps -a --format "{{.Names}}" | grep -c "^mssql$" || echo "0")
+if [ "$EXISTING_CONTAINER" -gt 0 ]; then
   echo "[provision] Removing old container 'mssql'..."
   sudo docker rm -f mssql || true
 fi
