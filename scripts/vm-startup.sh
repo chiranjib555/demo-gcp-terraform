@@ -81,38 +81,13 @@ mkdir -p /mnt/sqldata
 chown -R 10001:0 /mnt/sqldata
 chmod -R 770 /mnt/sqldata
 
-# Check if container is already running and healthy
-EXISTING=$(docker ps -q --filter name="${CONTAINER_NAME}" 2>/dev/null || echo "")
+# Check if container is already running
+EXISTING=$(docker ps -aq --filter name="${CONTAINER_NAME}" 2>/dev/null || echo "")
 
 if [ -n "$EXISTING" ]; then
-  log "Container ${CONTAINER_NAME} is already running"
-  
-  # Check if it's healthy
-  if docker exec "${CONTAINER_NAME}" /opt/mssql-tools18/bin/sqlcmd \
-      -S localhost -U SA -P "${SA_PASSWORD}" -C -Q "SELECT 1" >/dev/null 2>&1; then
-    log "Container is healthy, checking if init script changed..."
-    
-    # Only re-run init if file timestamp is newer (simple version check)
-    if [ "${SKIP_INIT}" != "true" ]; then
-      log "Running database initialization (idempotent)..."
-      docker cp /tmp/init-database.sql "${CONTAINER_NAME}":/tmp/init-database.sql
-      
-      docker exec "${CONTAINER_NAME}" /opt/mssql-tools18/bin/sqlcmd \
-        -S localhost -U SA -P "${SA_PASSWORD}" -C -b \
-        -v CI_PASSWORD="${CI_PASSWORD}" \
-        -v VERSION="$(date +%Y%m%d-%H%M%S)" \
-        -i /tmp/init-database.sql
-      
-      log "Database initialization complete"
-      docker exec "${CONTAINER_NAME}" rm -f /tmp/init-database.sql
-    fi
-    
-    log "=== Startup script complete (container already running) ==="
-    exit 0
-  else
-    log "Container exists but not healthy, recreating..."
-    docker rm -f "${CONTAINER_NAME}"
-  fi
+  log "Found existing container ${CONTAINER_NAME}, removing it for clean deployment..."
+  docker rm -f "${CONTAINER_NAME}"
+  log "Old container removed"
 fi
 
 # Pull latest SQL Server image

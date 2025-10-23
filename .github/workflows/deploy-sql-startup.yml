@@ -133,28 +133,43 @@ jobs:
           set -euo pipefail
           echo "=== Waiting for SQL Server to be ready ==="
           
-          # Give SQL Server container a moment to start
-          sleep 10
+          # Give SQL Server container time to start and initialize
+          echo "Waiting for SQL Server startup (this takes ~60-90 seconds)..."
+          sleep 60
           
-          # Check if SQL Server is responding
-          for i in {1..30}; do
-            if gcloud compute ssh "$VM_NAME" \
+          # Check if container is running and SQL Server is accepting connections
+          for i in {1..20}; do
+            # Check if container is running
+            CONTAINER_STATUS=$(gcloud compute ssh "$VM_NAME" \
                 --zone "$GCP_ZONE" \
                 --tunnel-through-iap \
-                --command "sudo docker exec $CONTAINER_NAME /opt/mssql-tools18/bin/sqlcmd -S localhost -U SA -P '\$(gcloud secrets versions access latest --secret=sql-sa-password)' -C -Q 'SELECT 1' >/dev/null 2>&1" 2>/dev/null; then
-              echo "✅ SQL Server is responding!"
-              break
+                --command "sudo docker inspect -f '{{.State.Status}}' $CONTAINER_NAME 2>/dev/null" 2>/dev/null || echo "not_found")
+            
+            if [ "$CONTAINER_STATUS" = "running" ]; then
+              echo "✅ SQL Server container is running!"
+              
+              # Give it a bit more time for SQL Server to fully start
+              sleep 10
+              
+              # Check SQL Server logs for "SQL Server is now ready for client connections"
+              if gcloud compute ssh "$VM_NAME" \
+                  --zone "$GCP_ZONE" \
+                  --tunnel-through-iap \
+                  --command "sudo docker logs $CONTAINER_NAME 2>&1 | grep -q 'SQL Server is now ready for client connections'" 2>/dev/null; then
+                echo "✅ SQL Server is ready for connections!"
+                break
+              fi
             fi
             
-            if [ $i -eq 30 ]; then
-              echo "⚠️  SQL Server not responding. Checking logs..."
+            if [ $i -eq 20 ]; then
+              echo "⚠️  SQL Server may still be starting. Showing recent logs..."
               gcloud compute ssh "$VM_NAME" \
                 --zone "$GCP_ZONE" \
                 --tunnel-through-iap \
-                --command "sudo docker logs $CONTAINER_NAME --tail 50"
+                --command "sudo docker logs $CONTAINER_NAME --tail 30"
             fi
             
-            echo "Waiting for SQL Server... ($i/30)"
+            echo "Waiting for SQL Server to be ready... ($i/20)"
             sleep 10
           done
 
