@@ -157,6 +157,10 @@ jobs:
             elif [ "$VM_STATUS" = "STOPPING" ]; then
               echo "VM is already stopping, waiting..."
               sleep 10
+            elif [ "$VM_STATUS" = "TERMINATED" ]; then
+              echo "✅ VM is already stopped (TERMINATED state)"
+              echo "Proceeding directly to deletion..."
+              echo ""
             fi
             
             # Delete the VM
