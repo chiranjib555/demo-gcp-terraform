@@ -172,7 +172,7 @@ jobs:
           echo "User: ci_user"
           echo -n "Container status: "
           gcloud compute ssh "$VM_NAME" --tunnel-through-iap \
-            --command "sudo docker ps --filter name=$CONTAINER_NAME --format '{{"{{"}}{{.Status}}{{"}}"}}'"
+            --command "sudo docker ps --filter name=$CONTAINER_NAME --format '{{.Status}}'"
 
       - name: Clean up
         if: always()
