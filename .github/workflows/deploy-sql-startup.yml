@@ -1,0 +1,167 @@
+name: Deploy SQL Server (Startup Script Pattern)
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to perform'
+        required: true
+        type: choice
+        options: [deploy, restart, stop]
+        default: 'deploy'
+  push:
+    branches: [ main ]
+    paths:
+      - 'infra/scripts/init-database.sql'
+      - 'scripts/vm-startup.sh'
+
+env:
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GCP_ZONE: us-central1-a
+  VM_NAME: sql-linux-vm
+  CONTAINER_NAME: mssql
+  GCS_BUCKET: praxis-sql-bootstrap
+
+jobs:
+  deploy-sql-server:
+    runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure gcloud
+        run: |
+          set -euo pipefail
+          gcloud config set project "$GCP_PROJECT_ID"
+          gcloud config set compute/zone "$GCP_ZONE"
+
+      - name: Handle action (stop/restart)
+        if: github.event.inputs.action == 'stop' || github.event.inputs.action == 'restart'
+        run: |
+          set -euo pipefail
+          
+          if [ "${{ github.event.inputs.action }}" = "stop" ]; then
+            echo "Stopping VM..."
+            gcloud compute instances stop "$VM_NAME" --zone "$GCP_ZONE"
+            echo "✅ VM stopped"
+            exit 0
+          fi
+          
+          if [ "${{ github.event.inputs.action }}" = "restart" ]; then
+            echo "Restarting VM..."
+            gcloud compute instances reset "$VM_NAME" --zone "$GCP_ZONE"
+            echo "✅ VM restarted, startup script will run automatically"
+            exit 0
+          fi
+
+      - name: Upload SQL init script to GCS
+        run: |
+          set -euo pipefail
+          echo "=== Uploading init-database.sql to GCS ==="
+          gsutil cp infra/scripts/init-database.sql "gs://${GCS_BUCKET}/init-database.sql"
+          echo "✅ SQL file uploaded"
+
+      - name: Upload startup script to VM metadata (if changed)
+        run: |
+          set -euo pipefail
+          echo "=== Updating VM startup script ==="
+          gcloud compute instances add-metadata "$VM_NAME" \
+            --zone "$GCP_ZONE" \
+            --metadata-from-file startup-script=scripts/vm-startup.sh
+          echo "✅ Startup script updated"
+
+      - name: Trigger deployment by resetting VM
+        run: |
+          set -euo pipefail
+          echo "=== Resetting VM to trigger startup script ==="
+          gcloud compute instances reset "$VM_NAME" --zone "$GCP_ZONE"
+          echo "VM is resetting..."
+
+      - name: Wait for VM to be ready
+        run: |
+          set -euo pipefail
+          echo "=== Waiting for VM to boot and run startup script ==="
+          
+          # Wait for VM to be RUNNING
+          for i in {1..30}; do
+            STATUS=$(gcloud compute instances describe "$VM_NAME" \
+              --zone "$GCP_ZONE" \
+              --format="value(status)")
+            
+            if [ "$STATUS" = "RUNNING" ]; then
+              echo "✅ VM is RUNNING"
+              break
+            fi
+            
+            if [ $i -eq 30 ]; then
+              echo "❌ VM did not start within 2.5 minutes"
+              exit 1
+            fi
+            
+            echo "Waiting for VM... ($i/30)"
+            sleep 5
+          done
+          
+          # Give startup script time to complete (usually 1-2 minutes)
+          echo "Waiting for startup script to complete (max 5 minutes)..."
+          sleep 30  # Initial wait for script to start
+          
+          for i in {1..30}; do
+            # Check if we can query the database (means script finished)
+            if gcloud compute ssh "$VM_NAME" \
+                --zone "$GCP_ZONE" \
+                --tunnel-through-iap \
+                --command "sudo docker exec $CONTAINER_NAME /opt/mssql-tools18/bin/sqlcmd -S localhost -U SA -P '\$(gcloud secrets versions access latest --secret=sql-sa-password)' -C -Q 'SELECT 1' >/dev/null 2>&1" 2>/dev/null; then
+              echo "✅ SQL Server is responding!"
+              break
+            fi
+            
+            if [ $i -eq 30 ]; then
+              echo "⚠️  Startup script may still be running. Check serial output:"
+              gcloud compute instances get-serial-port-output "$VM_NAME" \
+                --zone "$GCP_ZONE" | tail -50
+            fi
+            
+            echo "Waiting for SQL Server... ($i/30)"
+            sleep 10
+          done
+
+      - name: Verify deployment
+        run: |
+          set -euo pipefail
+          echo "=== Verifying Deployment ==="
+          
+          gcloud compute ssh "$VM_NAME" \
+            --zone "$GCP_ZONE" \
+            --tunnel-through-iap \
+            --command "sudo docker ps --filter name=$CONTAINER_NAME --format 'Container: {{.Names}} | Status: {{.Status}} | Ports: {{.Ports}}'"
+          
+          echo ""
+          echo "=== ✅ Deployment Complete ==="
+          echo "SQL Server 2022 is running on VM: $VM_NAME"
+          echo "Connect via: 34.57.37.222,1433"
+          echo "Database: DemoDB"
+          echo "User: ci_user"
+          echo ""
+          echo "To view startup script logs:"
+          echo "  gcloud compute instances get-serial-port-output $VM_NAME --zone $GCP_ZONE | grep startup-script"
+
+      - name: Show startup script logs (on failure)
+        if: failure()
+        run: |
+          echo "=== Startup Script Logs ==="
+          gcloud compute instances get-serial-port-output "$VM_NAME" \
+            --zone "$GCP_ZONE" | grep -A 100 "startup-script" || true
