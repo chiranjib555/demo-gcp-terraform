@@ -31,7 +31,7 @@ $ErrorActionPreference = "Stop"
 
 Write-Host "`n=== Local SQL Deployment Test ===" -ForegroundColor Yellow
 
-Write-Host "✓ Configuration validated" -ForegroundColor Green
+Write-Host "[OK] Configuration validated" -ForegroundColor Green
 Write-Host "  Project: $GcpProject"
 Write-Host "  Zone: $GcpZone"
 Write-Host "  VM: $VmName"
@@ -43,7 +43,7 @@ Write-Host "[Step 1/5] Configuring gcloud..." -ForegroundColor Yellow
 gcloud config set project $GcpProject
 gcloud config set compute/zone $GcpZone
 
-Write-Host "✓ Authenticated as:" -ForegroundColor Green
+Write-Host "[OK] Authenticated as:" -ForegroundColor Green
 gcloud auth list | Select-Object -First 3
 
 # Test SSH connection
@@ -53,10 +53,10 @@ try {
         --tunnel-through-iap `
         --zone $GcpZone `
         --command "echo 'SSH connection successful'"
-    Write-Host "✓ SSH connection working" -ForegroundColor Green
+    Write-Host "[OK] SSH connection working" -ForegroundColor Green
 }
 catch {
-    Write-Host "✗ SSH connection failed" -ForegroundColor Red
+    Write-Host "[ERROR] SSH connection failed" -ForegroundColor Red
     exit 1
 }
 
@@ -68,15 +68,15 @@ gcloud compute scp `
     scripts/provision_sql.sh `
     "${VmName}:/tmp/provision_sql.sh"
 
-Write-Host "✓ Script copied successfully" -ForegroundColor Green
+Write-Host "[OK] Script copied successfully" -ForegroundColor Green
 
 # Run provision script
 Write-Host "`n[Step 4/5] Running provision script on VM..." -ForegroundColor Yellow
 Write-Host "This may take 5-10 minutes..." -ForegroundColor Yellow
 
 # Escape special characters in passwords
-$SafeSaPwd = $SaPassword -replace "'", "'\''"
-$SafeCiPwd = $CiPassword -replace "'", "'\''"
+$SafeSaPwd = $SaPassword -replace "'", "'\'''"
+$SafeCiPwd = $CiPassword -replace "'", "'\'''"
 
 $command = "bash -lc 'chmod +x /tmp/provision_sql.sh && SA_PWD=`"$SafeSaPwd`" CI_LOGIN=`"$CiLogin`" CI_PASSWORD=`"$SafeCiPwd`" DATA_DIR=`"$DataDir`" DB_NAME=`"$DbName`" sudo -E /tmp/provision_sql.sh'"
 
@@ -87,16 +87,17 @@ try {
         -- -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null `
         $command
     
-    Write-Host "✓ Provision script completed successfully" -ForegroundColor Green
+    Write-Host "[OK] Provision script completed successfully" -ForegroundColor Green
 }
 catch {
-    Write-Host "✗ Provision script failed" -ForegroundColor Red
+    Write-Host "[ERROR] Provision script failed" -ForegroundColor Red
     Write-Host "`nFetching container logs for debugging..." -ForegroundColor Yellow
     
+    $debugCmd = "sudo docker ps -a; sudo docker logs --tail=200 mssql; sudo ls -l /mnt/sqldata"
     gcloud compute ssh $VmName `
         --tunnel-through-iap `
         --zone $GcpZone `
-        --command "sudo docker ps -a && sudo docker logs --tail=200 mssql && sudo ls -l /mnt/sqldata"
+        --command $debugCmd
     exit 1
 }
 
@@ -114,30 +115,32 @@ Write-Host "  Container status: $containerStatus"
 # Test SQL connection
 Write-Host "  Testing SQL connection..."
 try {
+    $sqlCmd = "sudo docker exec mssql /opt/mssql-tools/bin/sqlcmd -S localhost -U SA -P '$SafeSaPwd' -Q 'SELECT @@VERSION' -h -1"
     gcloud compute ssh $VmName `
         --tunnel-through-iap `
         --zone $GcpZone `
-        --command "sudo docker exec mssql /opt/mssql-tools/bin/sqlcmd -S localhost -U SA -P '$SafeSaPwd' -Q 'SELECT @@VERSION' -h -1" `
+        --command $sqlCmd `
         2>&1 | Out-Null
-    Write-Host "✓ SQL Server responding" -ForegroundColor Green
+    Write-Host "[OK] SQL Server responding" -ForegroundColor Green
 }
 catch {
-    Write-Host "✗ SQL Server not responding" -ForegroundColor Red
+    Write-Host "[ERROR] SQL Server not responding" -ForegroundColor Red
     exit 1
 }
 
 # Check database and user
 Write-Host "  Verifying database and user..."
+$dbCheckCmd = "sudo docker exec mssql /opt/mssql-tools/bin/sqlcmd -S localhost -U SA -P '$SafeSaPwd' -Q 'SELECT DB_ID(N`"$DbName`")' -h -1"
 $dbExists = gcloud compute ssh $VmName `
     --tunnel-through-iap `
     --zone $GcpZone `
-    --command "sudo docker exec mssql /opt/mssql-tools/bin/sqlcmd -S localhost -U SA -P '$SafeSaPwd' -Q 'SELECT DB_ID(N`"$DbName`")' -h -1"
+    --command $dbCheckCmd
 
 if ($dbExists -and $dbExists -notmatch "NULL") {
-    Write-Host "✓ Database '$DbName' exists" -ForegroundColor Green
+    Write-Host "[OK] Database '$DbName' exists" -ForegroundColor Green
 }
 else {
-    Write-Host "✗ Database '$DbName' not found" -ForegroundColor Red
+    Write-Host "[ERROR] Database '$DbName' not found" -ForegroundColor Red
     exit 1
 }
 
