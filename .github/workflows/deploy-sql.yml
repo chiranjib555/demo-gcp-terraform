@@ -20,8 +20,7 @@ jobs:
 
       - uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
 
       - uses: google-github-actions/setup-gcloud@v2
 
@@ -30,36 +29,36 @@ jobs:
           echo "SHELL=$SHELL"
           bash --version | head -n1
           gcloud auth list
-          gcloud config set project "${{ vars.GCP_PROJECT }}"
-          gcloud config set compute/zone "${{ vars.GCP_ZONE }}"
+          gcloud config set project "${{ secrets.GCP_PROJECT_ID }}"
+          gcloud config set compute/zone "us-central1-a"
 
       - name: Copy provision script
         run: |
           gcloud -q compute scp \
             --tunnel-through-iap \
-            --zone "${{ vars.GCP_ZONE }}" \
+            --zone "us-central1-a" \
             scripts/provision_sql.sh \
-            "${{ vars.SQLVM_NAME }}:/tmp/provision_sql.sh"
+            "sql-linux-vm:/tmp/provision_sql.sh"
 
       - name: Run provision script
         env:
           SA_PWD: ${{ secrets.SQL_SA_PASSWORD }}
-          CI_LOGIN: ${{ secrets.SQL_LOGIN }}
-          CI_PASSWORD: ${{ secrets.SQL_PASSWORD }}
+          CI_LOGIN: ci_user
+          CI_PASSWORD: ${{ secrets.SQL_CI_PASSWORD }}
           DATA_DIR: /mnt/sqldata
           DB_NAME: DemoDB
         run: |
-          gcloud -q compute ssh "${{ vars.SQLVM_NAME }}" \
+          gcloud -q compute ssh "sql-linux-vm" \
             --tunnel-through-iap \
-            --zone "${{ vars.GCP_ZONE }}" \
+            --zone "us-central1-a" \
             --strict-host-key-checking=no \
             --command="bash -lc 'chmod +x /tmp/provision_sql.sh && SA_PWD=\"$SA_PWD\" CI_LOGIN=\"$CI_LOGIN\" CI_PASSWORD=\"$CI_PASSWORD\" DATA_DIR=\"$DATA_DIR\" DB_NAME=\"$DB_NAME\" sudo -E /tmp/provision_sql.sh'"
 
       - name: Inspect container (on failure)
         if: failure()
         run: |
-          gcloud -q compute ssh "${{ vars.SQLVM_NAME }}" \
+          gcloud -q compute ssh "sql-linux-vm" \
             --tunnel-through-iap \
-            --zone "${{ vars.GCP_ZONE }}" \
+            --zone "us-central1-a" \
             --strict-host-key-checking=no \
             --command='sudo docker ps -a; echo "---- logs ----"; sudo docker logs --tail=200 mssql || true; echo "---- dir ----"; sudo ls -l /mnt/sqldata'
