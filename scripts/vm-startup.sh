@@ -80,7 +80,6 @@ if [ -n "$EXISTING" ]; then
     if [ "${SKIP_INIT}" != "true" ]; then
       log "Running database initialization (idempotent)..."
       docker cp /tmp/init-database.sql "${CONTAINER_NAME}":/tmp/init-database.sql
-      docker exec "${CONTAINER_NAME}" chown 10001:0 /tmp/init-database.sql
       docker exec "${CONTAINER_NAME}" chmod 640 /tmp/init-database.sql
       
       docker exec "${CONTAINER_NAME}" /opt/mssql-tools18/bin/sqlcmd \
@@ -144,7 +143,6 @@ done
 if [ "${SKIP_INIT}" != "true" ]; then
   log "Running database initialization..."
   docker cp /tmp/init-database.sql "${CONTAINER_NAME}":/tmp/init-database.sql
-  docker exec "${CONTAINER_NAME}" chown 10001:0 /tmp/init-database.sql
   docker exec "${CONTAINER_NAME}" chmod 640 /tmp/init-database.sql
   
   docker exec "${CONTAINER_NAME}" /opt/mssql-tools18/bin/sqlcmd \
