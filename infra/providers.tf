@@ -7,13 +7,14 @@ terraform {
     }
   }
 
-  # Terraform Cloud (fill org/workspace names in Phase 3)
-  cloud {
-    organization = "demo-gcp-terraform"
-    workspaces {
-      name = "demo-gcp-terraform"
-    }
-  }
+  # Terraform Cloud disabled - using local state for demo environment
+  # Uncomment below if you want to use Terraform Cloud:
+  # cloud {
+  #   organization = "demo-gcp-terraform"
+  #   workspaces {
+  #     name = "demo-gcp-terraform"
+  #   }
+  # }
 }
 
 provider "google" {
