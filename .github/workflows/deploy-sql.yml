@@ -68,101 +68,26 @@ jobs:
           CI_PASSWORD: ${{ secrets.SQL_CI_PASSWORD }}
           ACTION: ${{ github.event.inputs.action || 'deploy' }}
         run: |
+          set -euo pipefail
+          
           echo "=== Action: $ACTION ==="
           
-          if [ "$ACTION" = "stop" ]; then
-            echo "Stopping SQL Server container..."
-            gcloud compute ssh $VM_NAME --tunnel-through-iap \
-              --command "sudo docker stop $CONTAINER_NAME || true"
-            exit 0
+          # Copy init script to VM first (if exists)
+          if [ -f infra/scripts/init-database.sql ]; then
+            echo "=== Copying initialization script to VM ==="
+            gcloud compute scp infra/scripts/init-database.sql $VM_NAME:/tmp/init-database.sql \
+              --tunnel-through-iap
           fi
           
-          if [ "$ACTION" = "restart" ]; then
-            echo "Restarting SQL Server container..."
-            gcloud compute ssh $VM_NAME --tunnel-through-iap \
-              --command "sudo docker restart $CONTAINER_NAME"
-            exit 0
-          fi
-          
-          # Deploy action
-          echo "=== Deploying SQL Server 2022 ==="
-          
-          # Pull latest image
-          echo "Pulling SQL Server image..."
-          gcloud compute ssh $VM_NAME --tunnel-through-iap \
-            --command "sudo docker pull mcr.microsoft.com/mssql/server:$SQL_VERSION"
-          
-          # Ensure correct permissions on persistent volume (idempotent)
-          echo "Setting correct permissions on /mnt/sqldata..."
-          gcloud compute ssh $VM_NAME --tunnel-through-iap \
-            --command "sudo chown -R 10001:0 /mnt/sqldata && sudo chmod -R 770 /mnt/sqldata"
-          
-          # Stop and remove existing container if present
-          echo "Removing existing container if present..."
-          gcloud compute ssh $VM_NAME --tunnel-through-iap \
-            --command "sudo docker rm -f $CONTAINER_NAME 2>/dev/null || true"
-          
-          # Deploy SQL Server container with persistent storage
-          echo "Starting new SQL Server container..."
-          gcloud compute ssh $VM_NAME --tunnel-through-iap \
-            --command "sudo docker run -d \
-              --name $CONTAINER_NAME \
-              --hostname sqlserver \
-              --restart unless-stopped \
-              -e ACCEPT_EULA=Y \
-              -e MSSQL_PID=Developer \
-              -e 'MSSQL_SA_PASSWORD=$SA_PASSWORD' \
-              -p 1433:1433 \
-              -v /mnt/sqldata:/var/opt/mssql \
-              mcr.microsoft.com/mssql/server:$SQL_VERSION"
-          
-          # Wait for SQL Server to be ready (up to 5 minutes)
-          echo "Waiting for SQL Server to become healthy (max 5 minutes)..."
-          for i in $(seq 1 60); do
-            # Check container health status first
-            STATUS=\$(gcloud compute ssh $VM_NAME --tunnel-through-iap \
-              --command "sudo docker inspect -f '{{.State.Health.Status}}' $CONTAINER_NAME 2>/dev/null || echo 'unknown'")
-            
-            if [ "\$STATUS" = "healthy" ]; then
-              echo "✅ SQL Server is healthy!"
-              break
-            fi
-            
-            # Fallback: try simple query
-            if gcloud compute ssh $VM_NAME --tunnel-through-iap \
-              --command "sudo docker exec $CONTAINER_NAME /opt/mssql-tools18/bin/sqlcmd -S localhost -U SA -P '$SA_PASSWORD' -C -Q 'SELECT 1' >/dev/null 2>&1"; then
-              echo "✅ SQL Server is responding!"
-              break
-            fi
-            
-            if [ \$i -eq 60 ]; then
-              echo "❌ SQL Server not healthy after 5 minutes. Last logs:"
-              gcloud compute ssh $VM_NAME --tunnel-through-iap \
-                --command "sudo docker logs --tail=200 $CONTAINER_NAME" || true
-              exit 1
-            fi
-            
-            echo "Waiting... (\$i/60)"
-            sleep 5
-          done
-          
-          # Copy init script to VM
-          echo "=== Copying initialization script to VM ==="
-          gcloud compute scp infra/scripts/init-database.sql $VM_NAME:/tmp/init-database.sql \
+          # Copy remote deployment script to VM
+          echo "=== Copying remote deployment script to VM ==="
+          gcloud compute scp infra/scripts/remote-deploy.sh $VM_NAME:/tmp/remote-deploy.sh \
             --tunnel-through-iap
           
-          # Copy script from VM into the container and fix permissions for mssql user (UID 10001)
-          echo "=== Copying script into container ==="
-          gcloud compute ssh $VM_NAME --tunnel-through-iap --command "set -euo pipefail; sudo docker cp /tmp/init-database.sql $CONTAINER_NAME:/tmp/init-database.sql; sudo docker exec $CONTAINER_NAME chown 10001:0 /tmp/init-database.sql; sudo docker exec $CONTAINER_NAME chmod 640 /tmp/init-database.sql; sudo docker exec $CONTAINER_NAME ls -l /tmp/init-database.sql"
-          
-          # Run init script with variable substitution inside the container
-          echo "=== Running database initialization (idempotent) ==="
-          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-          gcloud compute ssh $VM_NAME --tunnel-through-iap --command "sudo docker exec $CONTAINER_NAME /opt/mssql-tools18/bin/sqlcmd -S localhost -U SA -P '$SA_PASSWORD' -C -b -v CI_PASSWORD='$CI_PASSWORD' -v VERSION='$TIMESTAMP' -i /tmp/init-database.sql"
-          
-          # Verify deployment
-          echo "=== Verifying deployment ==="
-          gcloud compute ssh $VM_NAME --tunnel-through-iap --command "sudo docker exec $CONTAINER_NAME /opt/mssql-tools18/bin/sqlcmd -S localhost -U SA -P '$SA_PASSWORD' -C -Q 'SELECT name, database_id, create_date FROM sys.databases WHERE name = N''DemoDB''; SELECT name, type_desc FROM sys.database_principals WHERE name = N''ci_user'';'"
+          # Execute remote script on VM (passes secrets as arguments)
+          echo "=== Running deployment on VM ==="
+          gcloud compute ssh $VM_NAME --tunnel-through-iap \
+            --command "chmod +x /tmp/remote-deploy.sh && sudo /tmp/remote-deploy.sh '$ACTION' '$SA_PASSWORD' '$CI_PASSWORD' '$CONTAINER_NAME' '$SQL_VERSION'"
           
           echo ""
           echo "=== ✅ Deployment complete! ==="
@@ -170,13 +95,14 @@ jobs:
           echo "Connect via: 34.57.37.222,1433"
           echo "Database: DemoDB"
           echo "User: ci_user"
-          echo "Container status: \$(gcloud compute ssh $VM_NAME --tunnel-through-iap --command 'sudo docker ps --filter name=$CONTAINER_NAME --format \"{{.Status}}\"')"
 
       - name: Clean up
         if: always()
         run: |
-          # Remove script from container
-          gcloud compute ssh $VM_NAME --tunnel-through-iap --command "sudo docker exec $CONTAINER_NAME rm -f /tmp/init-database.sql" || true
+          # Remove scripts from container
+          gcloud compute ssh $VM_NAME --tunnel-through-iap \
+            --command "sudo docker exec $CONTAINER_NAME rm -f /tmp/init-database.sql 2>/dev/null" || true
           
-          # Remove script from VM
-          gcloud compute ssh $VM_NAME --tunnel-through-iap --command "rm -f /tmp/init-database.sql" || true
+          # Remove scripts from VM
+          gcloud compute ssh $VM_NAME --tunnel-through-iap \
+            --command "rm -f /tmp/init-database.sql /tmp/remote-deploy.sh" || true
