@@ -48,11 +48,24 @@ jobs:
           DATA_DIR: /mnt/sqldata
           DB_NAME: DemoDB
         run: |
+          # Create wrapper script to avoid quoting issues
+          cat > /tmp/run-provision.sh << 'WRAPPER_EOF'
+          #!/bin/bash
+          chmod +x /tmp/provision_sql.sh
+          SA_PWD="$1" CI_LOGIN="$2" CI_PASSWORD="$3" DATA_DIR="$4" DB_NAME="$5" sudo -E /tmp/provision_sql.sh
+          WRAPPER_EOF
+          
+          # Copy wrapper to VM
+          gcloud -q compute scp /tmp/run-provision.sh sql-linux-vm:/tmp/run-provision.sh \
+            --tunnel-through-iap \
+            --zone "us-central1-a"
+          
+          # Execute wrapper with arguments
           gcloud -q compute ssh "sql-linux-vm" \
             --tunnel-through-iap \
             --zone "us-central1-a" \
             --strict-host-key-checking=no \
-            --command='bash -lc "chmod +x /tmp/provision_sql.sh && SA_PWD=\"$SA_PWD\" CI_LOGIN=\"$CI_LOGIN\" CI_PASSWORD=\"$CI_PASSWORD\" DATA_DIR=\"$DATA_DIR\" DB_NAME=\"$DB_NAME\" sudo -E /tmp/provision_sql.sh"'
+            --command="bash /tmp/run-provision.sh '$SA_PWD' '$CI_LOGIN' '$CI_PASSWORD' '$DATA_DIR' '$DB_NAME'"
 
       - name: Inspect container (on failure)
         if: failure()
