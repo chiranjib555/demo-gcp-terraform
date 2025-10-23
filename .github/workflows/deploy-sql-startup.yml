@@ -68,6 +68,7 @@ jobs:
           fi
 
       - name: Upload SQL init script to GCS
+        if: github.event.inputs.action == 'deploy' || github.event.inputs.action == ''
         run: |
           set -euo pipefail
           echo "=== Uploading init-database.sql to GCS ==="
@@ -75,6 +76,7 @@ jobs:
           echo "✅ SQL file uploaded"
 
       - name: Upload startup script to VM metadata (if changed)
+        if: github.event.inputs.action == 'deploy' || github.event.inputs.action == ''
         run: |
           set -euo pipefail
           echo "=== Updating VM startup script ==="
@@ -84,6 +86,7 @@ jobs:
           echo "✅ Startup script updated"
 
       - name: Trigger deployment by resetting VM
+        if: github.event.inputs.action == 'deploy' || github.event.inputs.action == ''
         run: |
           set -euo pipefail
           echo "=== Resetting VM to trigger startup script ==="
@@ -91,6 +94,7 @@ jobs:
           echo "VM is resetting..."
 
       - name: Wait for VM to be ready
+        if: github.event.inputs.action == 'deploy' || github.event.inputs.action == ''
         run: |
           set -euo pipefail
           echo "=== Waiting for VM to boot and run startup script ==="
@@ -140,6 +144,7 @@ jobs:
           done
 
       - name: Verify deployment
+        if: github.event.inputs.action == 'deploy' || github.event.inputs.action == ''
         run: |
           set -euo pipefail
           echo "=== Verifying Deployment ==="
