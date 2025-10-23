@@ -52,8 +52,8 @@ jobs:
           gcloud -q compute ssh "${{ vars.SQLVM_NAME }}" \
             --tunnel-through-iap \
             --zone "${{ vars.GCP_ZONE }}" \
-            -- -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-            "bash -lc 'chmod +x /tmp/provision_sql.sh && SA_PWD=\"$SA_PWD\" CI_LOGIN=\"$CI_LOGIN\" CI_PASSWORD=\"$CI_PASSWORD\" DATA_DIR=\"$DATA_DIR\" DB_NAME=\"$DB_NAME\" sudo -E /tmp/provision_sql.sh'"
+            --strict-host-key-checking=no \
+            --command="bash -lc 'chmod +x /tmp/provision_sql.sh && SA_PWD=\"$SA_PWD\" CI_LOGIN=\"$CI_LOGIN\" CI_PASSWORD=\"$CI_PASSWORD\" DATA_DIR=\"$DATA_DIR\" DB_NAME=\"$DB_NAME\" sudo -E /tmp/provision_sql.sh'"
 
       - name: Inspect container (on failure)
         if: failure()
@@ -61,4 +61,5 @@ jobs:
           gcloud -q compute ssh "${{ vars.SQLVM_NAME }}" \
             --tunnel-through-iap \
             --zone "${{ vars.GCP_ZONE }}" \
-            -- 'sudo docker ps -a; echo "---- logs ----"; sudo docker logs --tail=200 mssql || true; echo "---- dir ----"; sudo ls -l /mnt/sqldata'
+            --strict-host-key-checking=no \
+            --command='sudo docker ps -a; echo "---- logs ----"; sudo docker logs --tail=200 mssql || true; echo "---- dir ----"; sudo ls -l /mnt/sqldata'
