@@ -114,7 +114,10 @@ jobs:
             if [ $? -eq 0 ]; then echo "  ✅ Subnet imported"; else echo "  ℹ️  Subnet: already in state or will be created"; fi
             
             terraform import google_service_account.vm_runtime "projects/$GCP_PROJECT_ID/serviceAccounts/vm-runtime@$GCP_PROJECT_ID.iam.gserviceaccount.com"
-            if [ $? -eq 0 ]; then echo "  ✅ Service account imported"; else echo "  ℹ️  Service account: already in state or will be created"; fi
+            if [ $? -eq 0 ]; then echo "  ✅ VM runtime service account imported"; else echo "  ℹ️  VM runtime service account: already in state or will be created"; fi
+            
+            terraform import google_service_account.github_actions "projects/$GCP_PROJECT_ID/serviceAccounts/github-actions-deployer@$GCP_PROJECT_ID.iam.gserviceaccount.com"
+            if [ $? -eq 0 ]; then echo "  ✅ GitHub Actions service account imported"; else echo "  ℹ️  GitHub Actions service account: already in state or will be created"; fi
             
             terraform import google_compute_firewall.ssh "projects/$GCP_PROJECT_ID/global/firewalls/allow-ssh-admin"
             if [ $? -eq 0 ]; then echo "  ✅ SSH firewall imported"; else echo "  ℹ️  SSH firewall: already in state or will be created"; fi
@@ -124,6 +127,22 @@ jobs:
             
             terraform import google_compute_firewall.sql_1433 "projects/$GCP_PROJECT_ID/global/firewalls/allow-sql-1433-admin"
             if [ $? -eq 0 ]; then echo "  ✅ SQL firewall imported"; else echo "  ℹ️  SQL firewall: already in state or will be created"; fi
+            
+            # Import IAM bindings (format: "project-id role member")
+            terraform import google_project_iam_member.vm_runtime_logging "$GCP_PROJECT_ID roles/logging.logWriter serviceAccount:vm-runtime@$GCP_PROJECT_ID.iam.gserviceaccount.com"
+            if [ $? -eq 0 ]; then echo "  ✅ VM runtime logging IAM imported"; else echo "  ℹ️  VM runtime logging IAM: already in state or will be created"; fi
+            
+            terraform import google_project_iam_member.vm_runtime_monitoring "$GCP_PROJECT_ID roles/monitoring.metricWriter serviceAccount:vm-runtime@$GCP_PROJECT_ID.iam.gserviceaccount.com"
+            if [ $? -eq 0 ]; then echo "  ✅ VM runtime monitoring IAM imported"; else echo "  ℹ️  VM runtime monitoring IAM: already in state or will be created"; fi
+            
+            terraform import google_project_iam_member.github_actions_instance_admin "$GCP_PROJECT_ID roles/compute.instanceAdmin.v1 serviceAccount:github-actions-deployer@$GCP_PROJECT_ID.iam.gserviceaccount.com"
+            if [ $? -eq 0 ]; then echo "  ✅ GitHub Actions instance admin IAM imported"; else echo "  ℹ️  GitHub Actions instance admin IAM: already in state or will be created"; fi
+            
+            terraform import google_project_iam_member.github_actions_iap_tunnel "$GCP_PROJECT_ID roles/iap.tunnelResourceAccessor serviceAccount:github-actions-deployer@$GCP_PROJECT_ID.iam.gserviceaccount.com"
+            if [ $? -eq 0 ]; then echo "  ✅ GitHub Actions IAP tunnel IAM imported"; else echo "  ℹ️  GitHub Actions IAP tunnel IAM: already in state or will be created"; fi
+            
+            terraform import google_project_iam_member.github_actions_compute_viewer "$GCP_PROJECT_ID roles/compute.viewer serviceAccount:github-actions-deployer@$GCP_PROJECT_ID.iam.gserviceaccount.com"
+            if [ $? -eq 0 ]; then echo "  ✅ GitHub Actions compute viewer IAM imported"; else echo "  ℹ️  GitHub Actions compute viewer IAM: already in state or will be created"; fi
             
             set -e  # Re-enable exit on error
             
