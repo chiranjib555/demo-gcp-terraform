@@ -52,7 +52,7 @@ jobs:
             --tunnel-through-iap \
             --zone "us-central1-a" \
             --strict-host-key-checking=no \
-            --command="chmod +x /tmp/provision_sql.sh && export SA_PWD='$SA_PWD' CI_LOGIN='$CI_LOGIN' CI_PASSWORD='$CI_PASSWORD' DATA_DIR='$DATA_DIR' DB_NAME='$DB_NAME' && sudo -E /tmp/provision_sql.sh"
+            --command='bash -lc "chmod +x /tmp/provision_sql.sh && SA_PWD=\"$SA_PWD\" CI_LOGIN=\"$CI_LOGIN\" CI_PASSWORD=\"$CI_PASSWORD\" DATA_DIR=\"$DATA_DIR\" DB_NAME=\"$DB_NAME\" sudo -E /tmp/provision_sql.sh"'
 
       - name: Inspect container (on failure)
         if: failure()
