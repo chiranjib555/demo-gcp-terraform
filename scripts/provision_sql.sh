@@ -35,7 +35,8 @@ sudo docker run -d --name mssql \
 
 echo "[provision] Waiting up to 5 minutes for SQL to be ready..."
 for i in $(seq 1 60); do
-  if sudo docker inspect -f '{{.State.Health.Status}}' mssql 2>/dev/null | grep -q healthy; then
+  HEALTH_STATUS=$(sudo docker inspect -f "{{.State.Health.Status}}" mssql 2>/dev/null || echo "unknown")
+  if [ "$HEALTH_STATUS" = "healthy" ]; then
     echo "[provision] Health: healthy"
     break
   fi
