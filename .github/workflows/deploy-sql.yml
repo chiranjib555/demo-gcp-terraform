@@ -67,26 +67,61 @@ jobs:
           SA_PASSWORD: ${{ secrets.SQL_SA_PASSWORD }}
           CI_PASSWORD: ${{ secrets.SQL_CI_PASSWORD }}
           ACTION: ${{ github.event.inputs.action || 'deploy' }}
+          CI_LOGIN: ci_user
+          DB_NAME: DemoDB
+          DATA_DIR: /mnt/sqldata
         run: |
           set -euo pipefail
           
           echo "=== Action: $ACTION ==="
           
-          # Copy init script to VM first (if exists)
+          case "$ACTION" in
+            stop)
+              echo "=== Stopping SQL Server container ==="
+              gcloud compute ssh $VM_NAME --tunnel-through-iap \
+                --command "sudo docker stop $CONTAINER_NAME || true"
+              exit 0
+              ;;
+            restart)
+              echo "=== Restarting SQL Server container ==="
+              gcloud compute ssh $VM_NAME --tunnel-through-iap \
+                --command "sudo docker restart $CONTAINER_NAME"
+              exit 0
+              ;;
+            deploy)
+              ;;
+            *)
+              echo "Unknown action: $ACTION" >&2
+              exit 1
+              ;;
+          esac
+          
+          IMAGE="mcr.microsoft.com/mssql/server:${SQL_VERSION}"
+          
           if [ -f infra/scripts/init-database.sql ]; then
             echo "=== Copying initialization script to VM ==="
             gcloud compute scp infra/scripts/init-database.sql $VM_NAME:/tmp/init-database.sql \
               --tunnel-through-iap
           fi
           
-          # Execute remote script on VM (passes secrets as arguments)
-          echo "=== Running deployment on VM ==="
-          # Build remote command with bash-safe quoting so special chars remain intact
-          printf -v remote_command "sudo bash -s -- %q %q %q %q %q" \
-            "$ACTION" "$SA_PASSWORD" "$CI_PASSWORD" "$CONTAINER_NAME" "$SQL_VERSION"
-          # Stream script over STDIN to avoid quoting/escaping issues on remote side
+          echo "=== Copying provision script to VM ==="
+          gcloud compute scp scripts/provision_sql.sh $VM_NAME:/tmp/provision_sql.sh \
+            --tunnel-through-iap
+          
+          echo "=== Running provision script on VM ==="
+          printf -v provision_command "chmod +x /tmp/provision_sql.sh && sudo env SA_PWD=%q CI_LOGIN=%q CI_PASSWORD=%q DATA_DIR=%q DB_NAME=%q CONTAINER_NAME=%q IMAGE=%q /tmp/provision_sql.sh" \
+            "$SA_PASSWORD" "$CI_LOGIN" "$CI_PASSWORD" "$DATA_DIR" "$DB_NAME" "$CONTAINER_NAME" "$IMAGE"
           gcloud compute ssh $VM_NAME --tunnel-through-iap \
-            --command "$remote_command" < infra/scripts/remote-deploy.sh
+            --command "$provision_command"
+          
+          if [ -f infra/scripts/init-database.sql ]; then
+            echo "=== Applying initialization SQL ==="
+            printf -v init_bash "set -euo pipefail; sudo docker cp /tmp/init-database.sql %q:/tmp/init-database.sql; sudo docker exec %q /opt/mssql-tools18/bin/sqlcmd -S localhost -U SA -P %q -b -v CI_PASSWORD=%q -i /tmp/init-database.sql" \
+              "$CONTAINER_NAME" "$CONTAINER_NAME" "$SA_PASSWORD" "$CI_PASSWORD"
+            printf -v init_command "bash -lc %q" "$init_bash"
+            gcloud compute ssh $VM_NAME --tunnel-through-iap \
+              --command "$init_command"
+          fi
           
           echo ""
           echo "=== [OK] Deployment complete! ==="
@@ -104,4 +139,4 @@ jobs:
           
           # Remove scripts from VM
           gcloud compute ssh $VM_NAME --tunnel-through-iap \
-            --command "rm -f /tmp/init-database.sql" || true
+            --command "rm -f /tmp/init-database.sql /tmp/provision_sql.sh" || true
