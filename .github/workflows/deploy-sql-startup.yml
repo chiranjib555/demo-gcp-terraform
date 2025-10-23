@@ -97,7 +97,9 @@ jobs:
           gsutil cp infra/scripts/init-database.sql "gs://${GCS_BUCKET}/init-database.sql"
           echo "✅ SQL file uploaded"
           
-          # Make it publicly readable (optional - for easier access)
+          echo ""
+          echo "=== Uploading connection info script to GCS ==="
+          gsutil cp scripts/get-connection-info-cloud.sh "gs://${GCS_BUCKET}/get-connection-info-cloud.sh"
           gsutil acl ch -u AllUsers:R "gs://${GCS_BUCKET}/get-connection-info-cloud.sh"
           echo "✅ Connection info script uploaded"
           
