@@ -66,7 +66,7 @@ gcloud compute scp `
     --tunnel-through-iap `
     --zone $GcpZone `
     scripts/provision_sql.sh `
-    "$VmName:/tmp/provision_sql.sh"
+    "${VmName}:/tmp/provision_sql.sh"
 
 Write-Host "✓ Script copied successfully" -ForegroundColor Green
 
@@ -96,7 +96,7 @@ catch {
     gcloud compute ssh $VmName `
         --tunnel-through-iap `
         --zone $GcpZone `
-        -- "sudo docker ps -a; echo '---- logs ----'; sudo docker logs --tail=200 mssql || true; echo '---- dir ----'; sudo ls -l /mnt/sqldata"
+        --command "sudo docker ps -a && sudo docker logs --tail=200 mssql && sudo ls -l /mnt/sqldata"
     exit 1
 }
 
@@ -142,9 +142,9 @@ else {
 }
 
 # Final summary
-Write-Host "`n╔════════════════════════════════════════════╗" -ForegroundColor Green
-Write-Host "║   ✓ Deployment Test Successful!           ║" -ForegroundColor Green
-Write-Host "╚════════════════════════════════════════════╝" -ForegroundColor Green
+Write-Host "`n================================================" -ForegroundColor Green
+Write-Host "   DEPLOYMENT TEST SUCCESSFUL!                  " -ForegroundColor Green
+Write-Host "================================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "Connection details:"
 Write-Host "  Server: 34.57.37.222,1433"
