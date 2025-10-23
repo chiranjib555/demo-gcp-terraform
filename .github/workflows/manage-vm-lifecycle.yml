@@ -84,6 +84,17 @@ jobs:
             terraform init -input=false
             
             echo ""
+            echo "📦 Importing existing resources into Terraform state..."
+            
+            # Import existing resources (ignore errors if already imported or don't exist)
+            terraform import -var="project=$GCP_PROJECT_ID" -var="admin_ip_cidr=0.0.0.0/0" google_compute_address.sqlvm_ip "projects/$GCP_PROJECT_ID/regions/us-central1/addresses/sqlvm-ip" 2>/dev/null || true
+            terraform import -var="project=$GCP_PROJECT_ID" -var="admin_ip_cidr=0.0.0.0/0" google_compute_disk.sql_data "projects/$GCP_PROJECT_ID/zones/us-central1-a/disks/sql-data-disk" 2>/dev/null || true
+            terraform import -var="project=$GCP_PROJECT_ID" -var="admin_ip_cidr=0.0.0.0/0" google_compute_network.vpc "projects/$GCP_PROJECT_ID/global/networks/demo-vpc" 2>/dev/null || true
+            terraform import -var="project=$GCP_PROJECT_ID" -var="admin_ip_cidr=0.0.0.0/0" google_compute_subnetwork.subnet "projects/$GCP_PROJECT_ID/regions/us-central1/subnetworks/demo-subnet" 2>/dev/null || true
+            terraform import -var="project=$GCP_PROJECT_ID" -var="admin_ip_cidr=0.0.0.0/0" google_service_account.vm_runtime "projects/$GCP_PROJECT_ID/serviceAccounts/sql-vm-sa@$GCP_PROJECT_ID.iam.gserviceaccount.com" 2>/dev/null || true
+            
+            echo "✅ Import complete (or resources already in state)"
+            echo ""
             echo "Running terraform apply..."
             
             # Get secrets from Secret Manager
