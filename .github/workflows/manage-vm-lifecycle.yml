@@ -145,8 +145,22 @@ jobs:
             echo "Current VM status: $VM_STATUS"
             echo ""
             
+            # Stop VM first if it's running (cleaner shutdown)
+            if [ "$VM_STATUS" = "RUNNING" ]; then
+              echo "Stopping VM gracefully before deletion..."
+              gcloud compute instances stop "$VM_NAME" --zone "$GCP_ZONE"
+              echo "✅ VM stopped"
+              echo ""
+              
+              # Wait a moment for graceful shutdown
+              sleep 5
+            elif [ "$VM_STATUS" = "STOPPING" ]; then
+              echo "VM is already stopping, waiting..."
+              sleep 10
+            fi
+            
             # Delete the VM
-            echo "Deleting VM..."
+            echo "Deleting VM instance..."
             gcloud compute instances delete "$VM_NAME" \
               --zone "$GCP_ZONE" \
               --quiet
