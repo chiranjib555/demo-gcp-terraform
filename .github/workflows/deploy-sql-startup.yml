@@ -61,9 +61,26 @@ jobs:
           fi
           
           if [ "${{ github.event.inputs.action }}" = "restart" ]; then
-            echo "Restarting VM..."
-            gcloud compute instances reset "$VM_NAME" --zone "$GCP_ZONE"
-            echo "✅ VM restarted, startup script will run automatically"
+            echo "Checking VM status..."
+            STATUS=$(gcloud compute instances describe "$VM_NAME" \
+              --zone "$GCP_ZONE" \
+              --format="value(status)")
+            
+            echo "Current VM status: $STATUS"
+            
+            if [ "$STATUS" = "RUNNING" ]; then
+              echo "VM is running, performing reset..."
+              gcloud compute instances reset "$VM_NAME" --zone "$GCP_ZONE"
+              echo "✅ VM restarted, startup script will run automatically"
+            elif [ "$STATUS" = "TERMINATED" ]; then
+              echo "VM is stopped, starting it..."
+              gcloud compute instances start "$VM_NAME" --zone "$GCP_ZONE"
+              echo "✅ VM started, startup script will run automatically"
+            else
+              echo "⚠️ VM is in $STATUS state. Waiting for it to be ready..."
+              echo "Please try again in a moment."
+              exit 1
+            fi
             exit 0
           fi
 
