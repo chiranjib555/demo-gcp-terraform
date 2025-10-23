@@ -182,6 +182,32 @@ jobs:
           set -euo pipefail
           echo "=== Verifying Deployment ==="
           
+          # First, wait for Docker to be installed (startup script might still be running)
+          echo "Checking if Docker is installed..."
+          for i in {1..20}; do
+            if gcloud compute ssh "$VM_NAME" \
+                --zone "$GCP_ZONE" \
+                --tunnel-through-iap \
+                --command "command -v docker >/dev/null 2>&1" 2>/dev/null; then
+              echo "✅ Docker is installed"
+              break
+            fi
+            
+            if [ $i -eq 20 ]; then
+              echo "⚠️  Docker not found after 2 minutes. Startup script may have failed."
+              echo "Showing startup script logs:"
+              gcloud compute instances get-serial-port-output "$VM_NAME" \
+                --zone "$GCP_ZONE" | grep -A 100 "startup-script" || true
+              exit 1
+            fi
+            
+            echo "Waiting for Docker installation... ($i/20)"
+            sleep 6
+          done
+          
+          # Now check Docker containers
+          echo ""
+          echo "Checking Docker containers..."
           gcloud compute ssh "$VM_NAME" \
             --zone "$GCP_ZONE" \
             --tunnel-through-iap \
@@ -190,11 +216,11 @@ jobs:
           echo ""
           echo "=== ✅ Deployment Complete ==="
           echo "SQL Server 2022 is running on VM: $VM_NAME"
-          echo "Connect via: 34.57.37.222,1433"
+          echo "Connect via: External IP (get from 'Get Connection Info' workflow)"
           echo "Database: DemoDB"
           echo "User: ci_user"
           echo ""
-          echo "To view startup script logs:"
+          echo "To view full startup script logs:"
           echo "  gcloud compute instances get-serial-port-output $VM_NAME --zone $GCP_ZONE | grep startup-script"
 
       - name: Show startup script logs (on failure)
