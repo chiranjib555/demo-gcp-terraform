@@ -116,6 +116,15 @@ jobs:
             terraform import google_service_account.vm_runtime "projects/$GCP_PROJECT_ID/serviceAccounts/vm-runtime@$GCP_PROJECT_ID.iam.gserviceaccount.com"
             if [ $? -eq 0 ]; then echo "  ✅ Service account imported"; else echo "  ℹ️  Service account: already in state or will be created"; fi
             
+            terraform import google_compute_firewall.ssh "projects/$GCP_PROJECT_ID/global/firewalls/allow-ssh-admin"
+            if [ $? -eq 0 ]; then echo "  ✅ SSH firewall imported"; else echo "  ℹ️  SSH firewall: already in state or will be created"; fi
+            
+            terraform import google_compute_firewall.iap_ssh "projects/$GCP_PROJECT_ID/global/firewalls/allow-iap-ssh"
+            if [ $? -eq 0 ]; then echo "  ✅ IAP SSH firewall imported"; else echo "  ℹ️  IAP SSH firewall: already in state or will be created"; fi
+            
+            terraform import google_compute_firewall.sql_1433 "projects/$GCP_PROJECT_ID/global/firewalls/allow-sql-1433-admin"
+            if [ $? -eq 0 ]; then echo "  ✅ SQL firewall imported"; else echo "  ℹ️  SQL firewall: already in state or will be created"; fi
+            
             set -e  # Re-enable exit on error
             
             echo ""
