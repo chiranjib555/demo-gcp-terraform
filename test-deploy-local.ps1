@@ -81,11 +81,12 @@ $SafeCiPwd = $CiPassword -replace "'", "'\'''"
 $command = "bash -lc 'chmod +x /tmp/provision_sql.sh && SA_PWD=`"$SafeSaPwd`" CI_LOGIN=`"$CiLogin`" CI_PASSWORD=`"$SafeCiPwd`" DATA_DIR=`"$DataDir`" DB_NAME=`"$DbName`" sudo -E /tmp/provision_sql.sh'"
 
 try {
+    # Use --strict-host-key-checking instead of raw SSH options
     gcloud compute ssh $VmName `
         --tunnel-through-iap `
         --zone $GcpZone `
-        -- -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null `
-        $command
+        --strict-host-key-checking=no `
+        --command=$command
     
     Write-Host "[OK] Provision script completed successfully" -ForegroundColor Green
 }
