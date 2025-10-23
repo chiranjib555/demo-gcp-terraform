@@ -83,14 +83,13 @@ jobs:
             cd infra
             terraform init -input=false
             
-            echo ""
-            echo "Running terraform apply..."
-            
-            # Get secrets from Secret Manager
+            # Get secrets from Secret Manager FIRST
+            echo "Fetching secrets from Secret Manager..."
             SQL_SA_PASSWORD=$(gcloud secrets versions access latest --secret="sql-sa-password")
             SQL_CI_PASSWORD=$(gcloud secrets versions access latest --secret="sql-ci-password")
             
-            # Create terraform.tfvars for this run
+            # Create terraform.tfvars for this run BEFORE importing
+            echo "Creating Terraform variables file..."
             echo "project = \"$GCP_PROJECT_ID\"" > terraform.auto.tfvars
             echo "admin_ip_cidr = \"0.0.0.0/0\"" >> terraform.auto.tfvars
             echo "sql_sa_password = \"$SQL_SA_PASSWORD\"" >> terraform.auto.tfvars
@@ -99,15 +98,30 @@ jobs:
             echo ""
             echo "📦 Importing existing resources into Terraform state..."
             
-            # Import existing resources (ignore errors if already imported)
-            terraform import google_compute_address.sqlvm_ip "projects/$GCP_PROJECT_ID/regions/us-central1/addresses/sqlvm-ip" 2>/dev/null || echo "  - IP address: already in state or will be created"
-            terraform import google_compute_disk.sql_data "projects/$GCP_PROJECT_ID/zones/us-central1-a/disks/sql-data-disk" 2>/dev/null || echo "  - Disk: already in state or will be created"
-            terraform import google_compute_network.vpc "projects/$GCP_PROJECT_ID/global/networks/demo-vpc" 2>/dev/null || echo "  - VPC: already in state or will be created"
-            terraform import google_compute_subnetwork.subnet "projects/$GCP_PROJECT_ID/regions/us-central1/subnetworks/demo-subnet" 2>/dev/null || echo "  - Subnet: already in state or will be created"
-            terraform import google_service_account.vm_runtime "projects/$GCP_PROJECT_ID/serviceAccounts/sql-vm-sa@$GCP_PROJECT_ID.iam.gserviceaccount.com" 2>/dev/null || echo "  - Service account: already in state or will be created"
+            # Import existing resources (they must exist for import to succeed)
+            set +e  # Don't exit on error during imports
             
+            terraform import google_compute_address.sqlvm_ip "projects/$GCP_PROJECT_ID/regions/us-central1/addresses/sqlvm-ip"
+            if [ $? -eq 0 ]; then echo "  ✅ IP address imported"; else echo "  ℹ️  IP address: already in state or will be created"; fi
+            
+            terraform import google_compute_disk.sql_data "projects/$GCP_PROJECT_ID/zones/us-central1-a/disks/sql-data-disk"
+            if [ $? -eq 0 ]; then echo "  ✅ Disk imported"; else echo "  ℹ️  Disk: already in state or will be created"; fi
+            
+            terraform import google_compute_network.vpc "projects/$GCP_PROJECT_ID/global/networks/demo-vpc"
+            if [ $? -eq 0 ]; then echo "  ✅ VPC imported"; else echo "  ℹ️  VPC: already in state or will be created"; fi
+            
+            terraform import google_compute_subnetwork.subnet "projects/$GCP_PROJECT_ID/regions/us-central1/subnetworks/demo-subnet"
+            if [ $? -eq 0 ]; then echo "  ✅ Subnet imported"; else echo "  ℹ️  Subnet: already in state or will be created"; fi
+            
+            terraform import google_service_account.vm_runtime "projects/$GCP_PROJECT_ID/serviceAccounts/vm-runtime@$GCP_PROJECT_ID.iam.gserviceaccount.com"
+            if [ $? -eq 0 ]; then echo "  ✅ Service account imported"; else echo "  ℹ️  Service account: already in state or will be created"; fi
+            
+            set -e  # Re-enable exit on error
+            
+            echo ""
             echo "✅ Import phase complete"
             echo ""
+            echo "Running terraform apply..."
             
             # Apply only the VM instance (dependencies already exist/imported)
             terraform apply -target=google_compute_instance.sqlvm -auto-approve
