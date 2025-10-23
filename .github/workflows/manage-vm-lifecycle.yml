@@ -85,7 +85,19 @@ jobs:
             
             echo ""
             echo "Running terraform apply..."
-            terraform apply -target=google_compute_instance.sqlvm -auto-approve
+            
+            # Get secrets from Secret Manager
+            SQL_SA_PASSWORD=$(gcloud secrets versions access latest --secret="sql-sa-password")
+            SQL_CI_PASSWORD=$(gcloud secrets versions access latest --secret="sql-ci-password")
+            
+            # Apply with all required variables
+            terraform apply \
+              -target=google_compute_instance.sqlvm \
+              -var="project=$GCP_PROJECT_ID" \
+              -var="admin_ip_cidr=0.0.0.0/0" \
+              -var="sql_sa_password=$SQL_SA_PASSWORD" \
+              -var="sql_admin_password=$SQL_CI_PASSWORD" \
+              -auto-approve
             
             echo ""
             echo "✅ VM created successfully!"
