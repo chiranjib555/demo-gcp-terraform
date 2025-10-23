@@ -153,29 +153,16 @@ jobs:
           
           # Copy script from VM into the container and fix permissions for mssql user (UID 10001)
           echo "=== Copying script into container ==="
-          gcloud compute ssh $VM_NAME --tunnel-through-iap \
-            --command "set -euo pipefail; \
-              sudo docker cp /tmp/init-database.sql $CONTAINER_NAME:/tmp/init-database.sql; \
-              sudo docker exec $CONTAINER_NAME chown 10001:0 /tmp/init-database.sql; \
-              sudo docker exec $CONTAINER_NAME chmod 640 /tmp/init-database.sql; \
-              sudo docker exec $CONTAINER_NAME ls -l /tmp/init-database.sql"
+          gcloud compute ssh $VM_NAME --tunnel-through-iap --command "set -euo pipefail; sudo docker cp /tmp/init-database.sql $CONTAINER_NAME:/tmp/init-database.sql; sudo docker exec $CONTAINER_NAME chown 10001:0 /tmp/init-database.sql; sudo docker exec $CONTAINER_NAME chmod 640 /tmp/init-database.sql; sudo docker exec $CONTAINER_NAME ls -l /tmp/init-database.sql"
           
           # Run init script with variable substitution inside the container
           echo "=== Running database initialization (idempotent) ==="
           TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-          gcloud compute ssh $VM_NAME --tunnel-through-iap \
-            --command "sudo docker exec $CONTAINER_NAME /opt/mssql-tools18/bin/sqlcmd \
-              -S localhost -U SA -P '$SA_PASSWORD' -C -b \
-              -v CI_PASSWORD='$CI_PASSWORD' \
-              -v VERSION='$TIMESTAMP' \
-              -i /tmp/init-database.sql"
+          gcloud compute ssh $VM_NAME --tunnel-through-iap --command "sudo docker exec $CONTAINER_NAME /opt/mssql-tools18/bin/sqlcmd -S localhost -U SA -P '$SA_PASSWORD' -C -b -v CI_PASSWORD='$CI_PASSWORD' -v VERSION='$TIMESTAMP' -i /tmp/init-database.sql"
           
           # Verify deployment
           echo "=== Verifying deployment ==="
-          gcloud compute ssh $VM_NAME --tunnel-through-iap \
-            --command "sudo docker exec $CONTAINER_NAME /opt/mssql-tools18/bin/sqlcmd \
-              -S localhost -U SA -P '$SA_PASSWORD' -C \
-              -Q 'SELECT name, database_id, create_date FROM sys.databases WHERE name = N''DemoDB''; SELECT name, type_desc FROM sys.database_principals WHERE name = N''ci_user'';'"
+          gcloud compute ssh $VM_NAME --tunnel-through-iap --command "sudo docker exec $CONTAINER_NAME /opt/mssql-tools18/bin/sqlcmd -S localhost -U SA -P '$SA_PASSWORD' -C -Q 'SELECT name, database_id, create_date FROM sys.databases WHERE name = N''DemoDB''; SELECT name, type_desc FROM sys.database_principals WHERE name = N''ci_user'';'"
           
           echo ""
           echo "=== ✅ Deployment complete! ==="
@@ -189,9 +176,7 @@ jobs:
         if: always()
         run: |
           # Remove script from container
-          gcloud compute ssh $VM_NAME --tunnel-through-iap \
-            --command "sudo docker exec $CONTAINER_NAME rm -f /tmp/init-database.sql" || true
+          gcloud compute ssh $VM_NAME --tunnel-through-iap --command "sudo docker exec $CONTAINER_NAME rm -f /tmp/init-database.sql" || true
           
           # Remove script from VM
-          gcloud compute ssh $VM_NAME --tunnel-through-iap \
-            --command "rm -f /tmp/init-database.sql" || true
+          gcloud compute ssh $VM_NAME --tunnel-through-iap --command "rm -f /tmp/init-database.sql" || true
