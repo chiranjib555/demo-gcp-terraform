@@ -119,7 +119,7 @@ jobs:
           for i in $(seq 1 60); do
             # Check container health (if HEALTHCHECK is defined by the image)
             STATUS=$(gcloud compute ssh "$VM_NAME" --tunnel-through-iap \
-              --command "sudo docker inspect -f '{{.State.Health.Status}}' $CONTAINER_NAME 2>/dev/null || echo unknown")
+              --command "sudo docker inspect -f '{{"{{"}}{{.State.Health.Status}}{{"}}"}}' $CONTAINER_NAME 2>/dev/null || echo unknown")
 
             if [ "$STATUS" = "healthy" ]; then
               echo "✅ SQL Server is healthy!"
@@ -178,7 +178,7 @@ jobs:
           echo "User: ci_user"
           echo -n "Container status: "
           gcloud compute ssh "$VM_NAME" --tunnel-through-iap \
-            --command "sudo docker ps --filter name=$CONTAINER_NAME --format '{{.Status}}'"
+            --command "sudo docker ps --filter name=$CONTAINER_NAME --format '{{"{{"}}{{.Status}}{{"}}"}}'"
 
       - name: Clean up
         if: always()
