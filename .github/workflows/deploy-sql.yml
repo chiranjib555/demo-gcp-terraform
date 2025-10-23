@@ -1,142 +1,64 @@
-name: Deploy SQL Server to GCP
+name: Deploy or Manage SQL Server Container
 
 on:
   workflow_dispatch:
-    inputs:
-      action:
-        description: 'Action to perform'
-        required: true
-        type: choice
-        options:
-          - deploy
-          - restart
-          - stop
-        default: 'deploy'
-  push:
-    branches:
-      - main
-    paths:
-      - 'infra/scripts/init-database.sql'
-      - '.github/workflows/deploy-sql.yml'
 
-env:
-  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  GCP_ZONE: us-central1-a
-  VM_NAME: sql-linux-vm
-  CONTAINER_NAME: mssql
-  SQL_VERSION: "2022-latest"
-  CLOUDSDK_CORE_DISABLE_PROMPTS: "1"  # Auto-answer yes to all prompts
+permissions:
+  id-token: write
+  contents: read
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
-  deploy-sql-server:
+  deploy:
     runs-on: ubuntu-latest
-    
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
+      - uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
+      - uses: google-github-actions/setup-gcloud@v2
 
-      - name: Configure gcloud
+      - name: Sanity: confirm bash + principal
         run: |
-          gcloud config set project "$GCP_PROJECT_ID"
-          gcloud config set compute/zone "$GCP_ZONE"
-          
-          echo "=== Authenticated as: ==="
+          echo "SHELL=$SHELL"
+          bash --version | head -n1
           gcloud auth list
-          
-          echo ""
-          echo "=== VM Status: ==="
-          gcloud compute instances describe $VM_NAME --format="value(status,metadata.items[key='enable-oslogin'].value)"
+          gcloud config set project "${{ vars.GCP_PROJECT }}"
+          gcloud config set compute/zone "${{ vars.GCP_ZONE }}"
 
-      - name: Test SSH Connection
+      - name: Copy provision script
         run: |
-          echo "=== Testing IAP SSH Connection ==="
-          gcloud compute ssh $VM_NAME \
+          gcloud -q compute scp \
             --tunnel-through-iap \
-            --command "echo 'SSH connection successful!'"
+            --zone "${{ vars.GCP_ZONE }}" \
+            scripts/provision_sql.sh \
+            "${{ vars.SQLVM_NAME }}:/tmp/provision_sql.sh"
 
-      - name: Deploy or Manage SQL Server Container
+      - name: Run provision script
         env:
-          SA_PASSWORD: ${{ secrets.SQL_SA_PASSWORD }}
-          CI_PASSWORD: ${{ secrets.SQL_CI_PASSWORD }}
-          ACTION: ${{ github.event.inputs.action || 'deploy' }}
-          CI_LOGIN: ci_user
-          DB_NAME: DemoDB
+          SA_PWD: ${{ secrets.SQL_SA_PASSWORD }}
+          CI_LOGIN: ${{ secrets.SQL_LOGIN }}
+          CI_PASSWORD: ${{ secrets.SQL_PASSWORD }}
           DATA_DIR: /mnt/sqldata
+          DB_NAME: DemoDB
         run: |
-          set -euo pipefail
-          
-          echo "=== Action: $ACTION ==="
-          
-          case "$ACTION" in
-            stop)
-              echo "=== Stopping SQL Server container ==="
-              gcloud compute ssh $VM_NAME --tunnel-through-iap \
-                --command "sudo docker stop $CONTAINER_NAME || true"
-              exit 0
-              ;;
-            restart)
-              echo "=== Restarting SQL Server container ==="
-              gcloud compute ssh $VM_NAME --tunnel-through-iap \
-                --command "sudo docker restart $CONTAINER_NAME"
-              exit 0
-              ;;
-            deploy)
-              ;;
-            *)
-              echo "Unknown action: $ACTION" >&2
-              exit 1
-              ;;
-          esac
-          
-          IMAGE="mcr.microsoft.com/mssql/server:${SQL_VERSION}"
-          
-          if [ -f infra/scripts/init-database.sql ]; then
-            echo "=== Copying initialization script to VM ==="
-            gcloud compute scp infra/scripts/init-database.sql $VM_NAME:/tmp/init-database.sql \
-              --tunnel-through-iap
-          fi
-          
-          echo "=== Copying provision script to VM ==="
-          gcloud compute scp scripts/provision_sql.sh $VM_NAME:/tmp/provision_sql.sh \
-            --tunnel-through-iap
-          
-          echo "=== Running provision script on VM ==="
-          printf -v provision_command "chmod +x /tmp/provision_sql.sh && sudo env SA_PWD=%q CI_LOGIN=%q CI_PASSWORD=%q DATA_DIR=%q DB_NAME=%q CONTAINER_NAME=%q IMAGE=%q /tmp/provision_sql.sh" \
-            "$SA_PASSWORD" "$CI_LOGIN" "$CI_PASSWORD" "$DATA_DIR" "$DB_NAME" "$CONTAINER_NAME" "$IMAGE"
-          gcloud compute ssh $VM_NAME --tunnel-through-iap \
-            --command "$provision_command"
-          
-          if [ -f infra/scripts/init-database.sql ]; then
-            echo "=== Applying initialization SQL ==="
-            printf -v init_bash "set -euo pipefail; sudo docker cp /tmp/init-database.sql %q:/tmp/init-database.sql; sudo docker exec %q /opt/mssql-tools18/bin/sqlcmd -S localhost -U SA -P %q -b -v CI_PASSWORD=%q -i /tmp/init-database.sql" \
-              "$CONTAINER_NAME" "$CONTAINER_NAME" "$SA_PASSWORD" "$CI_PASSWORD"
-            printf -v init_command "bash -lc %q" "$init_bash"
-            gcloud compute ssh $VM_NAME --tunnel-through-iap \
-              --command "$init_command"
-          fi
-          
-          echo ""
-          echo "=== [OK] Deployment complete! ==="
-          echo "SQL Server 2022 is running on VM: $VM_NAME"
-          echo "Connect via: 34.57.37.222,1433"
-          echo "Database: DemoDB"
-          echo "User: ci_user"
+          gcloud -q compute ssh "${{ vars.SQLVM_NAME }}" \
+            --tunnel-through-iap \
+            --zone "${{ vars.GCP_ZONE }}" \
+            -- -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+            "bash -lc 'chmod +x /tmp/provision_sql.sh && SA_PWD=\"$SA_PWD\" CI_LOGIN=\"$CI_LOGIN\" CI_PASSWORD=\"$CI_PASSWORD\" DATA_DIR=\"$DATA_DIR\" DB_NAME=\"$DB_NAME\" sudo -E /tmp/provision_sql.sh'"
 
-      - name: Clean up
-        if: always()
+      - name: Inspect container (on failure)
+        if: failure()
         run: |
-          # Remove scripts from container
-          gcloud compute ssh $VM_NAME --tunnel-through-iap \
-            --command "sudo docker exec $CONTAINER_NAME rm -f /tmp/init-database.sql 2>/dev/null" || true
-          
-          # Remove scripts from VM
-          gcloud compute ssh $VM_NAME --tunnel-through-iap \
-            --command "rm -f /tmp/init-database.sql /tmp/provision_sql.sh" || true
+          gcloud -q compute ssh "${{ vars.SQLVM_NAME }}" \
+            --tunnel-through-iap \
+            --zone "${{ vars.GCP_ZONE }}" \
+            -- 'sudo docker ps -a; echo "---- logs ----"; sudo docker logs --tail=200 mssql || true; echo "---- dir ----"; sudo ls -l /mnt/sqldata'
