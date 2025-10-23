@@ -56,18 +56,18 @@ for i in $(seq 1 60); do
   STATUS=$(sudo docker inspect -f '{{.State.Health.Status}}' "$CONTAINER_NAME" 2>/dev/null || echo 'unknown')
   
   if [ "$STATUS" = "healthy" ]; then
-    echo "✅ SQL Server is healthy!"
+    echo "[OK] SQL Server is healthy!"
     break
   fi
   
   # Fallback: try simple query
   if sudo docker exec "$CONTAINER_NAME" /opt/mssql-tools18/bin/sqlcmd -S localhost -U SA -P "$SA_PASSWORD" -C -Q 'SELECT 1' >/dev/null 2>&1; then
-    echo "✅ SQL Server is responding!"
+    echo "[OK] SQL Server is responding!"
     break
   fi
   
   if [ "$i" -eq 60 ]; then
-    echo "❌ SQL Server not healthy after 5 minutes. Last logs:"
+    echo "[ERROR] SQL Server not healthy after 5 minutes. Last logs:"
     sudo docker logs --tail=200 "$CONTAINER_NAME" || true
     exit 1
   fi
@@ -98,4 +98,4 @@ else
   echo "No /tmp/init-database.sql found on VM; skipping DB init."
 fi
 
-echo "=== ✅ Deployment complete on VM ==="
+echo "=== [OK] Deployment complete on VM ==="

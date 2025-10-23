@@ -79,18 +79,17 @@ jobs:
               --tunnel-through-iap
           fi
           
-          # Copy remote deployment script to VM
-          echo "=== Copying remote deployment script to VM ==="
-          gcloud compute scp infra/scripts/remote-deploy.sh $VM_NAME:/tmp/remote-deploy.sh \
-            --tunnel-through-iap
-          
           # Execute remote script on VM (passes secrets as arguments)
           echo "=== Running deployment on VM ==="
+          # Build remote command with bash-safe quoting so special chars remain intact
+          printf -v remote_command "sudo bash -s -- %q %q %q %q %q" \
+            "$ACTION" "$SA_PASSWORD" "$CI_PASSWORD" "$CONTAINER_NAME" "$SQL_VERSION"
+          # Stream script over STDIN to avoid quoting/escaping issues on remote side
           gcloud compute ssh $VM_NAME --tunnel-through-iap \
-            --command "chmod +x /tmp/remote-deploy.sh && sudo /tmp/remote-deploy.sh '$ACTION' '$SA_PASSWORD' '$CI_PASSWORD' '$CONTAINER_NAME' '$SQL_VERSION'"
+            --command "$remote_command" < infra/scripts/remote-deploy.sh
           
           echo ""
-          echo "=== ✅ Deployment complete! ==="
+          echo "=== [OK] Deployment complete! ==="
           echo "SQL Server 2022 is running on VM: $VM_NAME"
           echo "Connect via: 34.57.37.222,1433"
           echo "Database: DemoDB"
@@ -105,4 +104,4 @@ jobs:
           
           # Remove scripts from VM
           gcloud compute ssh $VM_NAME --tunnel-through-iap \
-            --command "rm -f /tmp/init-database.sql /tmp/remote-deploy.sh" || true
+            --command "rm -f /tmp/init-database.sql" || true
