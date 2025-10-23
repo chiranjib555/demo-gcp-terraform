@@ -1,0 +1,189 @@
+name: Manage VM Lifecycle (Create/Destroy)
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Lifecycle action to perform'
+        required: true
+        type: choice
+        options: [create, destroy]
+        default: 'create'
+
+env:
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GCP_ZONE: us-central1-a
+  VM_NAME: sql-linux-vm
+  GCS_BUCKET: praxis-sql-bootstrap
+
+jobs:
+  manage-vm-lifecycle:
+    runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure gcloud
+        run: |
+          set -euo pipefail
+          gcloud config set project "$GCP_PROJECT_ID"
+          gcloud config set compute/zone "$GCP_ZONE"
+
+      - name: Setup Terraform
+        if: github.event.inputs.action == 'create'
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.5.0"
+
+      - name: Execute lifecycle action (Create or Destroy)
+        run: |
+          set -euo pipefail
+          
+          # ========== CREATE VM ==========
+          if [ "${{ github.event.inputs.action }}" = "create" ]; then
+            echo "🚀 Creating VM from Terraform configuration..."
+            echo ""
+            
+            # Check if VM already exists
+            if gcloud compute instances describe "$VM_NAME" --zone "$GCP_ZONE" &>/dev/null; then
+              echo "⚠️ VM already exists!"
+              STATUS=$(gcloud compute instances describe "$VM_NAME" --zone "$GCP_ZONE" --format="value(status)")
+              echo "Current status: $STATUS"
+              echo ""
+              echo "If you want to recreate the VM:"
+              echo "  1. Run this workflow with 'destroy' action first"
+              echo "  2. Then run with 'create' action"
+              echo ""
+              echo "Or use 'Deploy SQL Server' workflow with 'restart' action"
+              exit 1
+            fi
+            
+            echo "📋 Terraform will create VM with:"
+            echo "   • Name: $VM_NAME"
+            echo "   • Zone: $GCP_ZONE"
+            echo "   • Static IP: Existing (preserved)"
+            echo "   • Persistent Disk: Existing (your data safe)"
+            echo "   • Startup Script: Configured in metadata"
+            echo ""
+            
+            # Initialize and apply Terraform
+            cd infra
+            terraform init -input=false
+            
+            echo ""
+            echo "Running terraform apply..."
+            terraform apply -target=google_compute_instance.sqlvm -auto-approve
+            
+            echo ""
+            echo "✅ VM created successfully!"
+            echo ""
+            
+            # Get VM details
+            EXTERNAL_IP=$(gcloud compute instances describe "$VM_NAME" --zone "$GCP_ZONE" --format="get(networkInterfaces[0].accessConfigs[0].natIP)")
+            INTERNAL_IP=$(gcloud compute instances describe "$VM_NAME" --zone "$GCP_ZONE" --format="get(networkInterfaces[0].networkIP)")
+            
+            echo "🔧 VM Details:"
+            echo "   Name: $VM_NAME"
+            echo "   External IP: $EXTERNAL_IP"
+            echo "   Internal IP: $INTERNAL_IP"
+            echo "   Zone: $GCP_ZONE"
+            echo ""
+            echo "⏳ Next Steps:"
+            echo "   1. Startup script is running automatically (wait ~2-3 minutes)"
+            echo "   2. SQL Server will be deployed"
+            echo "   3. Database will be initialized"
+            echo ""
+            echo "To verify deployment:"
+            echo "   Run 'Deploy SQL Server' workflow with 'deploy' action"
+            echo ""
+            echo "To get connection strings:"
+            echo "   Run 'Get Connection Info' workflow"
+            
+            exit 0
+          fi
+          
+          # ========== DESTROY VM ==========
+          if [ "${{ github.event.inputs.action }}" = "destroy" ]; then
+            echo "💣 Destroying VM..."
+            echo ""
+            echo "⚠️  WARNING: This will DELETE the VM instance"
+            echo ""
+            echo "✅ These will be PRESERVED:"
+            echo "   • Static IP address (sqlvm-ip)"
+            echo "   • Persistent disk (sql-data-disk) - ALL YOUR DATA"
+            echo "   • VPC network and subnets"
+            echo "   • Firewall rules"
+            echo "   • Service accounts"
+            echo "   • Secret Manager secrets"
+            echo "   • GCS bucket"
+            echo ""
+            
+            # Check if VM exists
+            if ! gcloud compute instances describe "$VM_NAME" --zone "$GCP_ZONE" &>/dev/null; then
+              echo "⚠️ VM does not exist (already destroyed)"
+              echo ""
+              echo "To create it again:"
+              echo "   Run this workflow with 'create' action"
+              exit 0
+            fi
+            
+            # Get current VM status
+            VM_STATUS=$(gcloud compute instances describe "$VM_NAME" --zone "$GCP_ZONE" --format="value(status)")
+            echo "Current VM status: $VM_STATUS"
+            echo ""
+            
+            # Delete the VM
+            echo "Deleting VM..."
+            gcloud compute instances delete "$VM_NAME" \
+              --zone "$GCP_ZONE" \
+              --quiet
+            
+            echo ""
+            echo "✅ VM destroyed successfully!"
+            echo ""
+            echo "💰 COST SAVINGS:"
+            echo "   • Compute (e2-standard-2): ~\$14/month → \$0"
+            echo "   • Persistent disk: ~\$2/month (still charged, keeps your data)"
+            echo "   • Static IP: ~\$1.50/month (still charged, keeps your IP)"
+            echo "   • Total monthly savings: ~\$14/month (~80% reduction)"
+            echo ""
+            echo "🔧 To recreate the VM:"
+            echo "   1. Run this workflow with 'create' action"
+            echo "   2. Same IP address will be used"
+            echo "   3. Same data disk will be attached"
+            echo "   4. SQL Server will deploy automatically"
+            echo ""
+            
+            exit 0
+          fi
+
+      - name: Show next steps
+        if: always()
+        run: |
+          echo ""
+          echo "════════════════════════════════════════════════════════"
+          echo "Available Workflows:"
+          echo "════════════════════════════════════════════════════════"
+          echo ""
+          echo "1. Manage VM Lifecycle (THIS WORKFLOW)"
+          echo "   → Create or destroy the VM instance"
+          echo ""
+          echo "2. Deploy SQL Server"
+          echo "   → Deploy, restart, or stop running VM"
+          echo ""
+          echo "3. Get Connection Info"
+          echo "   → Fetch current IP and connection strings"
+          echo ""

@@ -48,27 +48,32 @@ jobs:
           gcloud config set project "$GCP_PROJECT_ID"
           gcloud config set compute/zone "$GCP_ZONE"
 
-      - name: Handle action (stop/restart)
+      - name: Handle VM actions (stop/restart)
         if: github.event.inputs.action == 'stop' || github.event.inputs.action == 'restart'
         run: |
           set -euo pipefail
           
+          # ========== STOP VM ==========
           if [ "${{ github.event.inputs.action }}" = "stop" ]; then
-            echo "Stopping VM..."
+            echo "🛑 Stopping VM..."
             gcloud compute instances stop "$VM_NAME" --zone "$GCP_ZONE"
-            echo "✅ VM stopped"
+            echo "✅ VM stopped (saves compute costs, keeps disk)"
             exit 0
           fi
           
+          # ========== RESTART VM ==========
           if [ "${{ github.event.inputs.action }}" = "restart" ]; then
-            echo "Checking VM status..."
+            echo "🔍 Checking VM status..."
             STATUS=$(gcloud compute instances describe "$VM_NAME" \
               --zone "$GCP_ZONE" \
-              --format="value(status)")
+              --format="value(status)" 2>/dev/null || echo "NOT_FOUND")
             
             echo "Current VM status: $STATUS"
             
-            if [ "$STATUS" = "RUNNING" ]; then
+            if [ "$STATUS" = "NOT_FOUND" ]; then
+              echo "❌ VM does not exist. Use 'create' action first."
+              exit 1
+            elif [ "$STATUS" = "RUNNING" ]; then
               echo "VM is running, performing reset..."
               gcloud compute instances reset "$VM_NAME" --zone "$GCP_ZONE"
               echo "✅ VM restarted, startup script will run automatically"
@@ -91,6 +96,15 @@ jobs:
           echo "=== Uploading init-database.sql to GCS ==="
           gsutil cp infra/scripts/init-database.sql "gs://${GCS_BUCKET}/init-database.sql"
           echo "✅ SQL file uploaded"
+          
+          # Make it publicly readable (optional - for easier access)
+          gsutil acl ch -u AllUsers:R "gs://${GCS_BUCKET}/get-connection-info-cloud.sh"
+          echo "✅ Connection info script uploaded"
+          
+          echo ""
+          echo "📝 To get connection info from anywhere:"
+          echo "   Open Cloud Shell: https://console.cloud.google.com"
+          echo "   Run: curl -s https://storage.googleapis.com/${GCS_BUCKET}/get-connection-info-cloud.sh | bash"
 
       - name: Upload startup script to VM metadata (if changed)
         if: github.event.inputs.action == 'deploy' || github.event.inputs.action == ''

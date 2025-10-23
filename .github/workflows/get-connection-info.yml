@@ -1,0 +1,156 @@
+name: Get Connection Info
+
+on:
+  workflow_dispatch:
+
+env:
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GCP_ZONE: us-central1-a
+  VM_NAME: sql-linux-vm
+  DATABASE: DemoDB
+  SQL_USER: ci_user
+
+jobs:
+  get-connection-info:
+    runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure gcloud
+        run: |
+          set -euo pipefail
+          gcloud config set project "$GCP_PROJECT_ID"
+          gcloud config set compute/zone "$GCP_ZONE"
+
+      - name: Fetch VM and connection information
+        run: |
+          set -euo pipefail
+          
+          echo ""
+          echo "╔════════════════════════════════════════════════════════════════════╗"
+          echo "║         SQL Server VM Connection Information                       ║"
+          echo "╚════════════════════════════════════════════════════════════════════╝"
+          echo ""
+          
+          # Check if VM exists
+          if ! gcloud compute instances describe "$VM_NAME" --zone "$GCP_ZONE" &>/dev/null; then
+              echo "❌ VM does not exist!"
+              echo ""
+              echo "The VM has been destroyed. To recreate it:"
+              echo "  Run 'Manage VM Lifecycle' workflow with 'create' action"
+              exit 1
+          fi
+          
+          # Get VM status
+          VM_STATUS=$(gcloud compute instances describe "$VM_NAME" --zone "$GCP_ZONE" --format="value(status)")
+          
+          echo "📊 VM Status:"
+          echo "   Name: $VM_NAME"
+          echo "   Zone: $GCP_ZONE"
+          echo "   Status: $VM_STATUS"
+          echo ""
+          
+          # Get IP addresses
+          EXTERNAL_IP=$(gcloud compute instances describe "$VM_NAME" \
+              --zone "$GCP_ZONE" \
+              --format="get(networkInterfaces[0].accessConfigs[0].natIP)")
+          
+          INTERNAL_IP=$(gcloud compute instances describe "$VM_NAME" \
+              --zone "$GCP_ZONE" \
+              --format="get(networkInterfaces[0].networkIP)")
+          
+          echo "🌐 Network Information:"
+          echo "   External IP: $EXTERNAL_IP"
+          echo "   Internal IP: $INTERNAL_IP"
+          echo "   SQL Port: 1433"
+          echo ""
+          
+          # Check if VM is running
+          if [ "$VM_STATUS" != "RUNNING" ]; then
+              echo "⚠️ VM is not running. Start it first to connect."
+              echo ""
+              echo "To start the VM:"
+              echo "  Run 'Deploy SQL Server' workflow with 'restart' action"
+              exit 0
+          fi
+          
+          # Generate connection strings
+          echo "🔌 Connection Strings:"
+          echo ""
+          
+          echo "ADO.NET / C# / .NET:"
+          echo "Server=${EXTERNAL_IP},1433;Database=${DATABASE};User Id=${SQL_USER};Password=<YOUR_PASSWORD>;TrustServerCertificate=True;Encrypt=True;"
+          echo ""
+          
+          echo "JDBC / Java:"
+          echo "jdbc:sqlserver://${EXTERNAL_IP}:1433;databaseName=${DATABASE};user=${SQL_USER};password=<YOUR_PASSWORD>;encrypt=true;trustServerCertificate=true;"
+          echo ""
+          
+          echo "ODBC:"
+          echo "Driver={ODBC Driver 18 for SQL Server};Server=${EXTERNAL_IP},1433;Database=${DATABASE};Uid=${SQL_USER};Pwd=<YOUR_PASSWORD>;Encrypt=yes;TrustServerCertificate=yes;"
+          echo ""
+          
+          echo "SQLAlchemy / Python:"
+          echo "mssql+pyodbc://${SQL_USER}:<YOUR_PASSWORD>@${EXTERNAL_IP}:1433/${DATABASE}?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes"
+          echo ""
+          
+          echo "Azure Data Studio / SSMS:"
+          echo "  Server: ${EXTERNAL_IP},1433"
+          echo "  Database: ${DATABASE}"
+          echo "  Authentication: SQL Server Authentication"
+          echo "  Username: ${SQL_USER}"
+          echo "  Password: <get from Secret Manager: sql-ci-password>"
+          echo "  Encryption: Mandatory"
+          echo "  Trust server certificate: Yes"
+          echo ""
+          
+          echo "✅ Connection information retrieved successfully!"
+          echo ""
+          
+          # Export as environment variables
+          echo "📝 Environment Variables (for .env file):"
+          echo "SQL_SERVER_HOST=${EXTERNAL_IP}"
+          echo "SQL_SERVER_PORT=1433"
+          echo "SQL_SERVER_DATABASE=${DATABASE}"
+          echo "SQL_SERVER_USER=${SQL_USER}"
+          echo "SQL_SERVER_PASSWORD=<get from Secret Manager: sql-ci-password>"
+          echo ""
+          
+          # Generate JSON output
+          echo "📋 JSON Output (for automation):"
+          cat << EOF
+          {
+            "vm_name": "$VM_NAME",
+            "status": "$VM_STATUS",
+            "zone": "$GCP_ZONE",
+            "external_ip": "$EXTERNAL_IP",
+            "internal_ip": "$INTERNAL_IP",
+            "database": "$DATABASE",
+            "username": "$SQL_USER",
+            "port": 1433,
+            "connection_string": "Server=${EXTERNAL_IP},1433;Database=${DATABASE};User Id=${SQL_USER};Password=<PASSWORD>;TrustServerCertificate=True;"
+          }
+          EOF
+          echo ""
+          
+          echo "════════════════════════════════════════════════════════"
+          echo "To get the SQL password:"
+          echo "  gcloud secrets versions access latest --secret=sql-ci-password"
+          echo ""
+          echo "To test connection from Cloud Shell:"
+          echo "  sqlcmd -S ${EXTERNAL_IP},1433 -U ${SQL_USER} -P '<PASSWORD>' -C -Q 'SELECT @@VERSION'"
+          echo "════════════════════════════════════════════════════════"
