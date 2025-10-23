@@ -132,8 +132,9 @@ jobs:
             echo ""
             echo "Running terraform apply..."
             
-            # Apply only the VM instance (dependencies already exist/imported)
-            terraform apply -target=google_compute_instance.sqlvm -auto-approve
+            # Apply without -target to let Terraform manage all resources properly
+            # The imports above ensure existing resources won't be recreated
+            terraform apply -auto-approve
             
             echo ""
             echo "✅ VM created successfully!"
