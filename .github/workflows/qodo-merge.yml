@@ -5,6 +5,22 @@ on:
     types: [opened, reopened, synchronize, ready_for_review]
   issue_comment: 
     types: [created]  # keep manual /review available even if auto is OFF
+  workflow_dispatch:  # Manual trigger from Actions UI
+    inputs:
+      pr_number:
+        description: 'PR number to review'
+        required: true
+        type: number
+      mode:
+        description: 'Review mode'
+        required: false
+        type: choice
+        default: 'review'
+        options:
+          - review
+          - improve
+          - describe
+          - summarize
 
 permissions:
   contents: read
