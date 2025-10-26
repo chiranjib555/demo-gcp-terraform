@@ -34,14 +34,21 @@ env:
 
 jobs:
   qodo:
-    # Run automatically on PR events only if QODO_ENABLED == true,
-    # OR always run when someone comments /review (manual trigger).
+    # Run conditions:
+    # 1. Auto: PR events when QODO_ENABLED == true
+    # 2. Manual: Issue comments with /review, /improve, etc.
+    # 3. Manual UI: workflow_dispatch (always runs)
     if: >
       (github.event_name == 'pull_request' && env.QODO_ENABLED == 'true') ||
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '/review'))
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '/')) ||
+      (github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     steps:
-      - name: Run Qodo PR-Agent
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Run Qodo PR-Agent (Auto or Comment trigger)
+        if: github.event_name != 'workflow_dispatch'
         uses: qodo-ai/pr-agent@main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -52,3 +59,18 @@ jobs:
           trigger_comment_command: "/review"
           verbosity_level: medium
           approve_pr_on_self_review: true
+      
+      - name: Run Qodo PR-Agent (Manual UI trigger)
+        if: github.event_name == 'workflow_dispatch'
+        uses: qodo-ai/pr-agent@main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # OPENAI_KEY: ${{ secrets.OPENAI_KEY }}  # if you BYO model key
+          # Pass the PR number and mode from workflow inputs
+          PR_NUMBER: ${{ inputs.pr_number }}
+          COMMAND: "/${{ inputs.mode }}"
+        with:
+          # Use the manual inputs for PR number and command
+          pr_number: ${{ inputs.pr_number }}
+          command: "/${{ inputs.mode }}"
+          verbosity_level: medium
