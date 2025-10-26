@@ -1,0 +1,38 @@
+name: Qodo PR review (toggleable)
+
+on:
+  pull_request: 
+    types: [opened, reopened, synchronize, ready_for_review]
+  issue_comment: 
+    types: [created]  # keep manual /review available even if auto is OFF
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  checks: read
+
+env:
+  # Global toggle: set this in repo variables (Settings → Actions → Variables)
+  QODO_ENABLED: ${{ vars.QODO_ENABLED || 'false' }}
+
+jobs:
+  qodo:
+    # Run automatically on PR events only if QODO_ENABLED == true,
+    # OR always run when someone comments /review (manual trigger).
+    if: >
+      (github.event_name == 'pull_request' && env.QODO_ENABLED == 'true') ||
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '/review'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run Qodo PR-Agent
+        uses: qodo-ai/pr-agent@main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # OPENAI_KEY: ${{ secrets.OPENAI_KEY }}  # if you BYO model key
+        with:
+          trigger_on_pull_request: true
+          trigger_on_comment: true
+          trigger_comment_command: "/review"
+          verbosity_level: medium
+          approve_pr_on_self_review: true
