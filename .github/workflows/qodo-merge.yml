@@ -8,9 +8,9 @@ on:
   workflow_dispatch:  # Manual trigger from Actions UI
     inputs:
       pr_number:
-        description: 'PR number to review'
+        description: 'PR number or URL to review'
         required: true
-        type: number
+        type: string
       mode:
         description: 'Review mode'
         required: false
@@ -66,11 +66,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # OPENAI_KEY: ${{ secrets.OPENAI_KEY }}  # if you BYO model key
-          # Pass the PR number and mode from workflow inputs
-          PR_NUMBER: ${{ inputs.pr_number }}
-          COMMAND: "/${{ inputs.mode }}"
+          # Use inputs for manual trigger, with fallbacks for auto/comment triggers
+          PR_NUMBER: ${{ github.event.inputs.pr_number || github.event.pull_request.number || github.event.issue.number }}
+          COMMAND: "/${{ github.event.inputs.mode || 'review' }}"
         with:
-          # Use the manual inputs for PR number and command
-          pr_number: ${{ inputs.pr_number }}
-          command: "/${{ inputs.mode }}"
+          # Handles all trigger types with proper fallbacks
+          pr_number: ${{ github.event.inputs.pr_number || github.event.pull_request.number || github.event.issue.number }}
+          command: "/${{ github.event.inputs.mode || 'review' }}"
           verbosity_level: medium
