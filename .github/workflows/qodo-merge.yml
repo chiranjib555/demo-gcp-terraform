@@ -44,6 +44,14 @@ jobs:
       (github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     steps:
+      - name: Validate trigger
+        run: |
+          echo "Event: ${{ github.event_name }}"
+          echo "QODO_ENABLED: ${{ env.QODO_ENABLED }}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Manual trigger - PR: ${{ github.event.inputs.pr_number }}, Mode: ${{ github.event.inputs.mode }}"
+          fi
+      
       - name: Checkout repository
         uses: actions/checkout@v4
       
@@ -60,17 +68,26 @@ jobs:
           verbosity_level: medium
           approve_pr_on_self_review: true
       
+      - name: Extract PR number from URL or use direct number
+        if: github.event_name == 'workflow_dispatch'
+        id: extract_pr
+        run: |
+          INPUT="${{ github.event.inputs.pr_number }}"
+          if [[ "$INPUT" =~ /pull/([0-9]+) ]]; then
+            PR_NUM="${BASH_REMATCH[1]}"
+          else
+            PR_NUM="$INPUT"
+          fi
+          echo "pr_number=$PR_NUM" >> $GITHUB_OUTPUT
+          echo "Processing PR #$PR_NUM"
+      
       - name: Run Qodo PR-Agent (Manual UI trigger)
         if: github.event_name == 'workflow_dispatch'
         uses: qodo-ai/pr-agent@main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # OPENAI_KEY: ${{ secrets.OPENAI_KEY }}  # if you BYO model key
-          # Use inputs for manual trigger, with fallbacks for auto/comment triggers
-          PR_NUMBER: ${{ github.event.inputs.pr_number || github.event.pull_request.number || github.event.issue.number }}
-          COMMAND: "/${{ github.event.inputs.mode || 'review' }}"
         with:
-          # Handles all trigger types with proper fallbacks
-          pr_number: ${{ github.event.inputs.pr_number || github.event.pull_request.number || github.event.issue.number }}
+          pr_number: ${{ steps.extract_pr.outputs.pr_number }}
           command: "/${{ github.event.inputs.mode || 'review' }}"
           verbosity_level: medium
