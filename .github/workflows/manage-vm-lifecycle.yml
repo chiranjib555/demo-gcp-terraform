@@ -1,5 +1,7 @@
 name: Manage VM Lifecycle (Create/Destroy)
 
+# This workflow allows manual triggering to create or destroy the GCP VM instance
+# while preserving persistent resources (IP, disk, network, etc.)
 on:
   workflow_dispatch:
     inputs:
