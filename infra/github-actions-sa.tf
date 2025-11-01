@@ -25,14 +25,15 @@ resource "google_project_iam_member" "github_actions_compute_viewer" {
   member  = "serviceAccount:${google_service_account.github_actions.email}"
 }
 
-# Create a key for GitHub Actions (store in GitHub Secrets as GCP_SA_KEY)
-resource "google_service_account_key" "github_actions_key" {
-  service_account_id = google_service_account.github_actions.name
-}
+# Service account key creation commented out - key already exists and is stored in GitHub Secrets
+# If you need to recreate the key, uncomment this and run terraform apply
+# resource "google_service_account_key" "github_actions_key" {
+#   service_account_id = google_service_account.github_actions.name
+# }
 
 # Output the private key (warning: sensitive!)
-output "github_actions_sa_key" {
-  value       = google_service_account_key.github_actions_key.private_key
-  sensitive   = true
-  description = "Private key for GitHub Actions service account (base64 encoded JSON)"
-}
+# output "github_actions_sa_key" {
+#   value       = google_service_account_key.github_actions_key.private_key
+#   sensitive   = true
+#   description = "Private key for GitHub Actions service account (base64 encoded JSON)"
+# }
