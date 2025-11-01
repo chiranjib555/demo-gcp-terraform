@@ -7,7 +7,9 @@ on:
         description: 'Lifecycle action to perform'
         required: true
         type: choice
-        options: [create, destroy]
+        options:
+          - create
+          - destroy
         default: 'create'
 
 env:
