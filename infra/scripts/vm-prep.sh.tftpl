@@ -58,16 +58,16 @@ if ! grep -q "$MOUNT_POINT" /etc/fstab; then
   echo "UUID=$(blkid -s UUID -o value $DEVICE_PATH) $MOUNT_POINT ext4 discard,defaults,nofail 0 2" >> /etc/fstab
 fi
 
-# Create SQL Server data directories
-mkdir -p "$MOUNT_POINT/data"
-mkdir -p "$MOUNT_POINT/log"
-mkdir -p "$MOUNT_POINT/secrets"
+# Create SQL Server data directories with mssql subdirectory structure
+mkdir -p "$MOUNT_POINT/mssql/data"
+mkdir -p "$MOUNT_POINT/mssql/log"
+mkdir -p "$MOUNT_POINT/mssql/secrets"
 
 # Set permissions for SQL Server container
 # Container runs as UID 10001 (mssql user), group 0 (root)
 # 770 = rwxrwx--- (owner and group can read/write/execute, others cannot)
-chown -R 10001:0 "$MOUNT_POINT"
-chmod -R 770 "$MOUNT_POINT"
+chown -R 10001:0 "$MOUNT_POINT/mssql"
+chmod -R 770 "$MOUNT_POINT/mssql"
 
 echo "=== VM prep complete! ==="
 echo "Docker version: $(docker --version)"
