@@ -28,10 +28,6 @@ permissions:
   issues: write
   checks: read
 
-env:
-  # Global toggle: set this in repo variables (Settings → Actions → Variables)
-  QODO_ENABLED: ${{ vars.QODO_ENABLED || 'false' }}
-
 jobs:
   qodo:
     # Run conditions:
@@ -39,10 +35,12 @@ jobs:
     # 2. Manual: Issue comments with /review, /improve, etc.
     # 3. Manual UI: workflow_dispatch (always runs)
     if: >
-      (github.event_name == 'pull_request' && env.QODO_ENABLED == 'true') ||
+      (github.event_name == 'pull_request' && vars.QODO_ENABLED == 'true') ||
       (github.event_name == 'issue_comment' && contains(github.event.comment.body, '/')) ||
       (github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
+    env:
+      QODO_ENABLED: ${{ vars.QODO_ENABLED || 'false' }}
     steps:
       - name: Validate trigger
         run: |
