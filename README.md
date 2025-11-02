@@ -27,6 +27,7 @@ This project automates the deployment of **SQL Server 2022 Developer Edition** o
 │  GitHub Actions Workflows                                        │
 │  ├─ manage-vm-lifecycle.yml   (Create/Destroy VM)               │
 │  ├─ deploy-sql-startup.yml    (Deploy SQL Server via SSH)       │
+│  ├─ get-connection-info.yml   (Retrieve connection details)     │
 │  └─ qodo-merge.yml            (AI PR Reviews)                   │
 └────────────────┬─────────────────────────────────────────────────┘
                  │ GCP Authentication (Service Account)
@@ -443,23 +444,37 @@ demo-gcp-terraform/
 │   └── workflows/
 │       ├── manage-vm-lifecycle.yml      # Create/destroy VM with resource imports
 │       ├── deploy-sql-startup.yml       # Deploy SQL Server container via SSH
+│       ├── get-connection-info.yml      # Retrieve VM connection information
 │       └── qodo-merge.yml               # AI-powered PR reviews
+├── docs/
+│   ├── CLOUD-SHELL-CONNECTION-INFO.md   # Cloud Shell connection guide
+│   └── VM-LIFECYCLE-MANAGEMENT.md       # VM lifecycle documentation
 ├── infra/
-│   ├── providers.tf                     # Terraform & GCP provider config (local state)
-│   ├── compute.sql-linux.tf             # VM definition with persistent disk
-│   ├── disk.sql-data.tf                 # 100GB SSD persistent disk (survives VM destruction)
-│   ├── network.sql-vpc.tf               # VPC network and subnet
-│   ├── firewall.sql.tf                  # Firewall rules (SSH from IAP, SQL from admin IP)
-│   ├── service-accounts.tf              # Service accounts (github-actions, vm-runtime)
-│   ├── secrets.tf                       # GCP Secret Manager (SQL passwords)
+│   ├── providers.tf                     # Terraform & GCP provider config
+│   ├── compute.sql-linux.tf             # VM definition with persistent disk & attached disk
+│   ├── firewall.tf                      # Firewall rules (SSH from IAP, SQL from admin IP)
+│   ├── github-actions-sa.tf             # GitHub Actions service account
+│   ├── vm-runtime-sa.tf                 # VM runtime service account (Secret Manager access)
+│   ├── vpc.tf                           # VPC network and subnet
 │   ├── variables.tf                     # Input variables
 │   ├── outputs.tf                       # Outputs (IPs, SA emails)
 │   ├── terraform.tfvars                 # Your configuration (gitignored)
 │   └── scripts/
-│       └── vm-prep.sh.tftpl             # VM startup script (Docker install, disk mount)
+│       ├── vm-prep.sh.tftpl             # VM startup script (Docker install, disk mount)
+│       ├── linux-first-boot.sh.tftpl    # All-in-one startup script (alternative)
+│       └── init-database.sql            # Database initialization SQL
 ├── scripts/
-│   └── vm-startup.sh                    # SQL Server deployment script (run via SSH)
-└── README.md
+│   ├── vm-startup.sh                    # SQL Server deployment script (run via SSH)
+│   ├── get-connection-info.sh           # Get connection info (bash)
+│   ├── get-connection-info-cloud.sh     # Get connection info (Cloud Shell)
+│   └── Get-ConnectionInfo.ps1           # Get connection info (PowerShell)
+├── CHANGELOG.md                         # Version history and accomplishments
+├── TROUBLESHOOTING.md                   # Common issues and solutions
+├── README.md                            # Main documentation (this file)
+├── check-status.ps1                     # Check VM and SQL Server status
+├── spinup.ps1                           # Quick VM creation script
+├── teardown.ps1                         # Quick VM destruction script
+└── update-ip.ps1                        # Update firewall for new IP
 ```
 
 ### Key Files Explained
@@ -468,13 +483,18 @@ demo-gcp-terraform/
 |------|---------|--------------|
 | **`manage-vm-lifecycle.yml`** | VM create/destroy automation | Imports existing resources before apply to avoid conflicts; supports manual trigger with action selection |
 | **`deploy-sql-startup.yml`** | SQL Server deployment | SSH via IAP; copies and executes `vm-startup.sh`; always recreates container with fresh password |
+| **`get-connection-info.yml`** | Connection info retrieval | Displays VM IP, SSH commands, and SQL connection strings |
 | **`qodo-merge.yml`** | AI code review integration | Three trigger modes (auto/comment/manual); supports PR URL or number input |
-| **`compute.sql-linux.tf`** | VM resource definition | e2-standard-2 instance; auto-reattaches persistent disk; service account with cloud-platform scope |
-| **`disk.sql-data.tf`** | Persistent storage | 100GB SSD; `prevent_destroy = true`; survives VM deletion |
-| **`service-accounts.tf`** | IAM service accounts | `github-actions-deployer` (admin roles); `vm-runtime` (Secret Manager access) |
-| **`secrets.tf`** | Password management | Stores SQL SA password in Secret Manager; accessible from VM |
-| **`vm-prep.sh.tftpl`** | VM initialization | Installs Docker, formats/mounts disk; runs on VM boot via metadata |
+| **`compute.sql-linux.tf`** | VM resource definition | e2-standard-2 instance; attaches persistent disk; service account with cloud-platform scope |
+| **`firewall.tf`** | Firewall rules | SSH via IAP tunnel; SQL Server port 1433 restricted to admin IP |
+| **`github-actions-sa.tf`** | GitHub Actions service account | Admin roles for Terraform and SSH; IAP tunnel access |
+| **`vm-runtime-sa.tf`** | VM runtime service account | Secret Manager access for SQL passwords |
+| **`vpc.tf`** | Network infrastructure | Custom VPC with subnet for SQL Server VM |
+| **`vm-prep.sh.tftpl`** | VM initialization | Installs Docker, mounts persistent disk at `/mnt/sqldata/mssql/{data,log,secrets}` |
 | **`vm-startup.sh`** | SQL deployment script | Deployed via SSH; pulls SQL Server image, configures volumes, starts container |
+| **`init-database.sql`** | Database initialization | Creates DemoDB, sample tables (Customers, Products, Orders), and ci_user |
+| **`CHANGELOG.md`** | Version history | Detailed accomplishments, issues resolved, lessons learned |
+| **`TROUBLESHOOTING.md`** | Issue resolution guide | Common problems with step-by-step solutions |
 
 ### Workflow Dependencies
 
