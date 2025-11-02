@@ -76,10 +76,12 @@ if ! command -v docker &> /dev/null; then
 fi
 
 # Ensure data directory exists with correct permissions
-log "Setting up /mnt/sqldata..."
-mkdir -p /mnt/sqldata
-chown -R 10001:0 /mnt/sqldata
-chmod -R 770 /mnt/sqldata
+log "Setting up /mnt/sqldata with subdirectories..."
+mkdir -p /mnt/sqldata/mssql/data
+mkdir -p /mnt/sqldata/mssql/log
+mkdir -p /mnt/sqldata/mssql/secrets
+chown -R 10001:0 /mnt/sqldata/mssql
+chmod -R 770 /mnt/sqldata/mssql
 
 # Check if container is already running
 EXISTING=$(docker ps -aq --filter name="${CONTAINER_NAME}" 2>/dev/null || echo "")
@@ -98,7 +100,7 @@ docker pull "mcr.microsoft.com/mssql/server:${SQL_VERSION}"
 docker rm -f "${CONTAINER_NAME}" 2>/dev/null || true
 
 # Start SQL Server container
-log "Starting SQL Server container..."
+log "Starting SQL Server container with persistent volumes..."
 docker run -d \
   --name "${CONTAINER_NAME}" \
   --hostname sqlserver \
@@ -107,7 +109,9 @@ docker run -d \
   -e MSSQL_PID=Developer \
   -e MSSQL_SA_PASSWORD="${SA_PASSWORD}" \
   -p 1433:1433 \
-  -v /mnt/sqldata:/var/opt/mssql \
+  -v /mnt/sqldata/mssql/data:/var/opt/mssql/data \
+  -v /mnt/sqldata/mssql/log:/var/opt/mssql/log \
+  -v /mnt/sqldata/mssql/secrets:/var/opt/mssql/secrets \
   "mcr.microsoft.com/mssql/server:${SQL_VERSION}"
 
 # Wait for SQL Server to be ready
