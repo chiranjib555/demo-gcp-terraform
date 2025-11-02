@@ -147,7 +147,7 @@ gcloud compute instances get-serial-port-output sql-linux-vm --zone=us-central1-
 mkdir -p "$MOUNT_POINT/mssql/data"
 mkdir -p "$MOUNT_POINT/mssql/log"
 mkdir -p "$MOUNT_POINT/mssql/secrets"
-chown -R 10001:0 "$MOUNT_POINT/mssql"
+chown -R 10001:10001 "$MOUNT_POINT/mssql"
 ```
 
 **Verification:**
