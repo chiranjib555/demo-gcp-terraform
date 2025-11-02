@@ -56,13 +56,11 @@ resource "google_compute_instance" "sqlvm" {
     }
   }
 
-  # Full startup script: prep VM, install Docker, deploy SQL Server, create database and users
+  # Minimal startup script: only prep VM, mount disk, install Docker
+  # SQL Server deployment handled by "Deploy SQL Server" workflow
   metadata = {
-    startup-script = templatefile("${path.module}/scripts/linux-first-boot.sh.tftpl", {
-      sql_sa_password = var.sql_sa_password
-      db_name         = var.db_name
-      sql_login       = var.sql_admin_login
-      sql_password    = var.sql_admin_password
+    startup-script = templatefile("${path.module}/scripts/vm-prep.sh.tftpl", {
+      device_name = "sql-data"
     })
     enable-oslogin = "FALSE" # DISABLED - Use metadata-based SSH keys for simpler IAP access
   }
