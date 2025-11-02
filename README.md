@@ -10,7 +10,7 @@ This project automates the deployment of **SQL Server 2022 Developer Edition** o
 
 - **🔄 Automated VM Lifecycle**: Create/destroy VMs via GitHub Actions workflows ✅ **VERIFIED**
 - **💾 Persistent Data**: 100GB SSD disk with proper subdirectory structure survives VM destruction ✅ **TESTED**
-- **🌐 Static IP**: Stable connection endpoint (34.57.37.222) across rebuilds ✅ **WORKING**
+- **🌐 Static IP**: Stable connection endpoint across rebuilds ✅ **WORKING**
 - **🐳 Containerized SQL Server**: Docker-based SQL Server 2022 deployment ✅ **DEPLOYED**
 - **🔐 Secure Access**: IAP tunneling, service account authentication, firewall rules ✅ **CONFIGURED**
 - **🤖 AI-Powered PR Reviews**: Qodo Merge integration for code quality ✅ **ENABLED**
@@ -44,7 +44,7 @@ This project automates the deployment of **SQL Server 2022 Developer Edition** o
                  ▼
 ┌──────────────────────────────────────────────────────────────────┐
 │  Compute VM: sql-linux-vm (e2-standard-2, Debian 11)            │
-│  ├─ Static IP: 34.57.37.222 (prevent_destroy = true) ✅         │
+│  ├─ Static IP: <your-static-ip> (prevent_destroy = true) ✅    │
 │  ├─ Persistent Disk: /mnt/sqldata (100GB SSD, auto-reattach)    │
 │  │  └─ /mnt/sqldata/mssql/{data,log,secrets} ✅ VERIFIED        │
 │  ├─ Startup Script: vm-prep.sh.tftpl                            │
@@ -72,102 +72,13 @@ This project automates the deployment of **SQL Server 2022 Developer Edition** o
 
 ---
 
-## 🎉 Recent Accomplishments (November 2, 2025)
+## 📚 Documentation
 
-### ✅ Fully Operational SQL Server Infrastructure
+- **📜 [Change Log](./CHANGELOG.md)** - Detailed version history, accomplishments, and lessons learned
+- **🔧 [Troubleshooting Guide](./TROUBLESHOOTING.md)** - Common issues and solutions
 
-**Deployment Status:**
-- ✅ **VM Created**: `sql-linux-vm` (e2-standard-2, Debian 11) running in us-central1-a
-- ✅ **Static IP Allocated**: 34.57.37.222 (stable across VM rebuilds)
-- ✅ **Persistent Storage**: 100GB SSD mounted at `/mnt/sqldata` with proper subdirectory structure
-- ✅ **SQL Server 2022**: Developer Edition running in Docker container
-- ✅ **Database Created**: DemoDB with sample schema and data
-- ✅ **Users Configured**: SA (admin) + ci_user (application user with db_owner)
-- ✅ **SSMS Connection**: Successfully connected from Windows 11 laptop
-
-### 📊 Sample Database Schema
-
-**DemoDB** includes the following tables:
-
-| Table | Records | Description |
-|-------|---------|-------------|
-| **Customers** | 5 | Customer master data (ID, Name, Email, Phone) |
-| **Products** | 10 | Product catalog (ID, Name, Category, Price, Stock) |
-| **Orders** | 5 | Order headers (ID, CustomerID, Date, Total) |
-| **OrderDetails** | 15 | Order line items (OrderID, ProductID, Quantity, Price) |
-
-**Sample Data Includes:**
-- Technology products: Laptop, Smartphone, Tablet, Monitor, Keyboard, etc.
-- Customer orders with line items and totals
-- Full referential integrity (foreign keys configured)
-
-### 🔧 Issues Resolved
-
-1. **✅ Git Branch Synchronization**: Resolved merge conflicts and synchronized with origin/main
-2. **✅ GitHub Actions Workflows**: Fixed and verified both VM lifecycle and SQL deployment workflows
-3. **✅ Service Account Keys**: Properly extracted and configured GCP_SA_KEY for GitHub Actions
-4. **✅ SQL Server Path Issues**: Updated sqlcmd path from `/opt/mssql-tools` to `/opt/mssql-tools18/bin/sqlcmd`
-5. **✅ Persistent Storage**: Implemented correct subdirectory structure `/mnt/sqldata/mssql/{data,log,secrets}`
-6. **✅ Script Consistency**: Aligned `vm-prep.sh.tftpl` and `vm-startup.sh` for consistent paths
-7. **✅ Qodo Merge Integration**: Fixed workflow context issues (env vs vars)
-8. **✅ Database Initialization**: Deployed init-database.sql via startup workflow
-9. **✅ User Permissions**: Granted ci_user db_owner role on DemoDB
-10. **✅ SSMS Connectivity**: Verified external access from Windows laptop
-
-### 🎯 Validated Features
-
-| Feature | Status | Verification Method |
-|---------|--------|---------------------|
-| **VM Creation** | ✅ Working | GitHub Actions workflow executed successfully |
-| **Persistent Disk Mount** | ✅ Working | Verified `/mnt/sqldata` mount and subdirectories |
-| **SQL Server Container** | ✅ Running | `docker ps` shows mssql container active |
-| **Database Files on Disk** | ✅ Confirmed | Checked `/mnt/sqldata/mssql/data/DemoDB.mdf` exists |
-| **User Authentication** | ✅ Working | Connected with ci_user credentials |
-| **Sample Data** | ✅ Populated | Queried Customers, Products, Orders tables |
-| **External Access** | ✅ Working | SSMS connection from Windows 11 successful |
-| **Firewall Rules** | ✅ Configured | SQL port 1433 accessible from admin IP |
-| **IAP SSH Access** | ✅ Working | GitHub Actions can SSH via IAP tunnel |
-| **Secret Manager** | ✅ Integrated | Passwords retrieved from GCP secrets |
-
-### 📝 Workflow Testing Results
-
-**Workflow 1: Manage VM Lifecycle (Create/Destroy)** ✅
-- Create action: Successfully provisions VM with all resources
-- Persistent resources preserved: Static IP, persistent disk, VPC, firewall
-- Destroy action: Removes VM, keeps persistent resources intact
-
-**Workflow 2: Deploy SQL Server (Startup Script Pattern)** ✅
-- SSH via IAP: Connection successful
-- Script execution: vm-startup.sh runs without errors
-- Container deployment: SQL Server 2022 starts successfully
-- Database initialization: init-database.sql executed
-- User creation: ci_user created with proper permissions
-
-**Workflow 3: Qodo Merge (AI PR Reviews)** ✅
-- Manual trigger: Works with PR number or URL
-- Comment trigger: Responds to `/review` commands
-- Auto trigger: Configurable via QODO_ENABLED variable
-- Context issues: Resolved (moved env to job level, use vars in if condition)
-
-### 🎓 Lessons Learned
-
-1. **SQL Server 2022 Tools**: Uses `/opt/mssql-tools18` (not `mssql-tools`), requires `-C` flag for trust server certificate
-2. **Persistent Storage Structure**: Must create `/mnt/sqldata/mssql/` subdirectories for proper separation
-3. **Docker Volume Mounts**: Explicit volume mappings ensure data persists on external disk
-4. **GitHub Actions Context**: `env` cannot be used in job-level `if`, use `vars` instead
-5. **Branch Protection**: Requires PR workflow for all changes (good practice enforced)
-6. **Password Complexity**: SQL Server requires strong passwords (uppercase, lowercase, digit, special char)
-7. **Service Account Scopes**: VM needs `cloud-platform` scope for Secret Manager access
-8. **IAP Permissions**: GitHub Actions SA needs `roles/iap.tunnelResourceAccessor` for SSH
-
-### 🚀 Ready for Production Testing
-
-The infrastructure is now ready for:
-- ✅ **Data Persistence Testing**: Destroy/recreate VM and verify data survives
-- ✅ **Application Development**: Connect apps to ci_user account
-- ✅ **Performance Testing**: Load testing with sample data
-- ✅ **Backup/Restore**: Test database backup procedures
-- ✅ **Cost Optimization**: Implement tear-down/spin-up schedules
+**Latest Version:** 2.0.0 (November 2, 2025)  
+**Status:** ✅ **Production Ready** - All features tested and verified
 
 ---
 
@@ -409,30 +320,32 @@ terraform output
 ### Connection Details
 
 **Server Information:**
-- **Host:** `34.57.37.222` (Static IP - never changes) ✅
+- **Host:** `<your-static-ip>` (Static IP - never changes) ✅
 - **Port:** `1433` ✅
 - **Authentication:** SQL Server Authentication ✅
 - **User:** `sa` (full admin) or `ci_user` (db_owner permissions) ✅
 - **Password:** Stored in GitHub Secrets / GCP Secret Manager ✅
 - **Database:** `DemoDB` (with sample Customers, Products, Orders, OrderDetails tables) ✅
 
-**✅ VERIFIED WORKING:** Successfully connected from Windows 11 laptop using SSMS on November 2, 2025
+> **Note:** Get your static IP with: `terraform output sqlvm_external_ip` or check GCP Console
+
+**✅ VERIFIED WORKING:** Successfully tested external client connection
 
 ### Connection Strings
 
 **ADO.NET:**
 ```csharp
-Server=34.57.37.222,1433;Database=master;User Id=sa;Password=YOUR_PASSWORD;TrustServerCertificate=True;Encrypt=True;
+Server=<your-static-ip>,1433;Database=master;User Id=sa;Password=<your-password>;TrustServerCertificate=True;Encrypt=True;
 ```
 
 **JDBC:**
 ```java
-jdbc:sqlserver://34.57.37.222:1433;databaseName=master;user=sa;password=YOUR_PASSWORD;encrypt=true;trustServerCertificate=true;
+jdbc:sqlserver://<your-static-ip>:1433;databaseName=master;user=sa;password=<your-password>;encrypt=true;trustServerCertificate=true;
 ```
 
 **PowerShell (SqlClient):**
 ```powershell
-$connectionString = "Server=34.57.37.222,1433;Database=master;User Id=sa;Password=YOUR_PASSWORD;TrustServerCertificate=True;"
+$connectionString = "Server=<your-static-ip>,1433;Database=master;User Id=sa;Password=<your-password>;TrustServerCertificate=True;"
 $connection = New-Object System.Data.SqlClient.SqlConnection($connectionString)
 $connection.Open()
 $command = $connection.CreateCommand()
@@ -444,12 +357,14 @@ $connection.Close()
 
 **SQL Server Management Studio (SSMS):** ✅ **TESTED AND WORKING**
 1. Server type: **Database Engine**
-2. Server name: `34.57.37.222,1433`
+2. Server name: `<your-static-ip>,1433`
 3. Authentication: **SQL Server Authentication**
 4. Login: `ci_user` (for application access) or `sa` (for admin)
-5. Password: `ChangeMe_UseStrongPwd#2025!` (ci_user) or your SA password
+5. Password: `<your-ci-user-password>` (for ci_user) or your SA password
 6. Encryption: **Optional** (or uncheck "Encrypt connection")
 7. ✅ **Successfully connected and verified DemoDB database accessible**
+
+> **Security Note:** Never commit passwords to version control. Use GCP Secret Manager or GitHub Secrets.
 
 **Sample Query to Verify Connection:**
 ```sql
@@ -803,83 +718,7 @@ terraform import google_compute_instance.sqlvm projects/praxis-gantry-475007-k0/
 
 ---
 
-### Common Issues We've Resolved
-
-**Problem:** sqlcmd not found or connection fails
-
-**Root Cause:** SQL Server 2022 uses `/opt/mssql-tools18` instead of `/opt/mssql-tools`
-
-**Solution:**
-```bash
-# Correct command for SQL Server 2022
-/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'password' -C -Q "SELECT @@VERSION"
-```
-✅ **Fixed in:** `vm-startup.sh`, `linux-first-boot.sh.tftpl`
-
----
-
-**Problem:** Database files not on persistent disk after manual setup
-
-**Root Cause:** Docker volumes not explicitly mounted to `/mnt/sqldata`
-
-**Solution:**
-```bash
-# Correct Docker run command with volume mounts
-sudo docker run -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=$PASSWORD" \
-  -p 1433:1433 --name mssql --hostname mssql \
-  -v /mnt/sqldata/mssql/data:/var/opt/mssql/data \
-  -v /mnt/sqldata/mssql/log:/var/opt/mssql/log \
-  -v /mnt/sqldata/mssql/secrets:/var/opt/mssql/secrets \
-  -d mcr.microsoft.com/mssql/server:2022-latest
-```
-✅ **Fixed in:** `vm-startup.sh`, `vm-prep.sh.tftpl`
-
----
-
-**Problem:** Path mismatch between vm-prep.sh and vm-startup.sh
-
-**Root Cause:** vm-prep.sh created `/mnt/sqldata/data`, vm-startup.sh expected `/mnt/sqldata/mssql/data`
-
-**Solution:** Updated vm-prep.sh to create consistent subdirectory structure:
-```bash
-mkdir -p "$MOUNT_POINT/mssql/data"
-mkdir -p "$MOUNT_POINT/mssql/log"
-mkdir -p "$MOUNT_POINT/mssql/secrets"
-chown -R 10001:0 "$MOUNT_POINT/mssql"
-```
-✅ **Fixed in:** PR #[latest] - vm-prep.sh.tftpl
-
----
-
-**Problem:** Qodo Merge workflow errors: "Unrecognized named-value: 'env'"
-
-**Root Cause:** `env` context cannot be accessed in job-level `if` conditions
-
-**Solution:** 
-- Changed `env.QODO_ENABLED` to `vars.QODO_ENABLED` in `if` condition
-- Moved `env:` block from workflow level to job level
-```yaml
-jobs:
-  qodo:
-    if: >
-      (github.event_name == 'pull_request' && vars.QODO_ENABLED == 'true') ||
-      ...
-    env:
-      QODO_ENABLED: ${{ vars.QODO_ENABLED || 'false' }}
-```
-✅ **Fixed in:** PR #[latest] - qodo-merge.yml
-
----
-
-**Problem:** ci_user not created during initial deployment
-
-**Root Cause:** Startup script errors prevented user creation SQL from executing
-
-**Solution:** 
-1. Fixed sqlcmd path issues
-2. Ensured init-database.sql includes user creation
-3. Verified script uploads to GCS and executes successfully
-✅ **Fixed in:** Manual setup, then automated in workflows
+> **💡 Having issues?** Check the [**Troubleshooting Guide**](./TROUBLESHOOTING.md) for detailed solutions to common problems.
 
 ---
 
@@ -1039,30 +878,12 @@ gcloud compute scp sql-linux-vm:/mnt/sqldata/data/DemoDB.bak ./DemoDB.bak --tunn
 
 ---
 
-## 📜 Change Log
-
-### Version 2.0.0 (November 2, 2025)
-- ✅ Implemented persistent storage with proper subdirectory structure
-- ✅ Fixed SQL Server 2022 tooling path issues
-- ✅ Aligned vm-prep.sh and vm-startup.sh for consistency
-- ✅ Added DemoDB sample database with relational schema
-- ✅ Created ci_user with db_owner permissions
-- ✅ Fixed Qodo Merge workflow context issues
-- ✅ Verified SSMS connectivity from external Windows laptop
-- ✅ Validated complete deployment workflow end-to-end
-
-### Version 1.0.0 (Initial Release)
-- Initial Terraform infrastructure setup
-- GitHub Actions workflow for VM lifecycle
-- SQL Server 2022 containerized deployment
-- Basic networking and firewall configuration
-
----
-
 **Version:** 2.0.0  
 **Last Updated:** November 2, 2025  
 **Project:** demo-gcp-terraform  
 **Status:** ✅ **Production Ready** - All features tested and verified
+
+For detailed version history, see [CHANGELOG.md](./CHANGELOG.md)
 
 ---
 
