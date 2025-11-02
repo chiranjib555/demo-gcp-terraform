@@ -1,0 +1,42 @@
+[pr_reviewer]
+# Enable conditional auto-approval by Qodo Merge
+auto_approve = true
+
+# Auto-approve only if PR score is above 80 (out of 100)
+# Score reflects code quality, security, best practices
+auto_approve_on_score = 80
+
+# Require all CI/CD status checks to pass before approving
+require_all_tests_pass = true
+
+# Only approve if no critical issues found
+require_score_review = true
+
+# Don't approve PRs with security issues
+require_security_review = true
+
+[pr_description]
+# Enable auto-generation of PR descriptions
+publish_description = true
+
+[pr_code_suggestions]
+# Enable code improvement suggestions
+num_code_suggestions = 4
+
+[github]
+# Prevent auto-approval for large PRs (more prone to issues)
+max_auto_approve_lines = 500
+
+# Skip auto-approval if PR modifies these critical files
+critical_files_patterns = [
+    "*.tf",           # Terraform files (infrastructure)
+    "*.tfvars",       # Terraform variables
+    "*.yml",          # GitHub workflows
+    "*.yaml",         # Workflow configs
+]
+
+# Require extra review for these file types
+require_human_review_for = [
+    ".github/workflows/*.yml",  # Workflow changes
+    "infra/*.tf",               # Infrastructure changes
+]
