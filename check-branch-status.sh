@@ -34,8 +34,7 @@ fi
 
 # If no compare branch specified, use current branch
 if [ -z "$COMPARE_BRANCH" ]; then
-    COMPARE_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
-    if [ $? -ne 0 ]; then
+    if ! COMPARE_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null); then
         echo -e "${RED}❌ Could not determine current branch.${NC}"
         exit 1
     fi
@@ -77,8 +76,7 @@ if ! git rev-parse --verify "$COMPARE_BRANCH" &> /dev/null; then
 fi
 
 # Get ahead/behind counts
-COUNTS=$(git rev-list --left-right --count "$BASE_BRANCH...$COMPARE_BRANCH" 2>/dev/null)
-if [ $? -ne 0 ]; then
+if ! COUNTS=$(git rev-list --left-right --count "$BASE_BRANCH...$COMPARE_BRANCH" 2>/dev/null); then
     echo -e "${RED}❌ Could not compare branches.${NC}"
     exit 1
 fi
