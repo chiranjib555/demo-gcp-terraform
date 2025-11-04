@@ -340,7 +340,7 @@ This ensures PRs need approval to merge, which the bot provides automatically wh
   - Mounts persistent disk volumes (`/mnt/sqldata/data`, `/mnt/sqldata/log`)
   - Starts SQL Server on port 1433
 - Verifies container is running and checks logs
--------------------------------------------------------------------------Testing Only ---------------------------------------------------------------------------------
+
 **Automatic Trigger:**
 - Push to `main` branch when `scripts/vm-startup.sh` changes
 
