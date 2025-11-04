@@ -87,31 +87,6 @@ jobs:
             exit 0
           fi
           
-          # Poll for Qodo review comments to avoid race conditions
-          TIMEOUT=120 # 2 minutes
-          INTERVAL=10 # seconds
-          ELAPSED=0
-
-          while true; do
-            ISSUES=$(gh pr view ${{ github.event.pull_request.number }} --json comments --jq '[.comments[] | select(.author.login == "qodo-merge[bot]" or .author.login == "github-actions[bot]") | .body | select(contains("🔴") or contains("⚠️") or contains("Suggestion:") or contains("Issue:") or contains("potential issue"))] | length')
-  
-            QODO_COMMENT_COUNT=$(gh pr view ${{ github.event.pull_request.number }} --json comments --jq '[.comments[] | select(.author.login == "qodo-merge[bot]")] | length')
-
-            if [ "$QODO_COMMENT_COUNT" -gt 0 ]; then
-              echo "✅ Qodo review comment found. Proceeding with check."
-              break
-            fi
-
-            if [ "$ELAPSED" -ge "$TIMEOUT" ]; then
-              echo "⏰ Timed out waiting for Qodo review comment. Skipping auto-approval."
-              ISSUES=1 # Force skip approval
-              break
-            fi
-
-            echo "Waiting for Qodo review comment... ($ELAPSED/$TIMEOUT seconds)"
-            sleep $INTERVAL
-            ELAPSED=$((ELAPSED + INTERVAL))
-          done
           # Wait a bit for Qodo to finish posting comments
           sleep 10
           
