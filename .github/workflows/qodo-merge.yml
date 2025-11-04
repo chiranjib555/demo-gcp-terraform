@@ -112,6 +112,11 @@ jobs:
             sleep $INTERVAL
             ELAPSED=$((ELAPSED + INTERVAL))
           done
+          # Wait a bit for Qodo to finish posting comments
+          sleep 10
+          
+          # Check if Qodo found any issues/suggestions in PR comments
+          ISSUES=$(gh pr view ${{ github.event.pull_request.number }} --json comments --jq '[.comments[] | select(.author.login == "qodo-merge[bot]" or .author.login == "github-actions[bot]") | .body | select(contains("🔴") or contains("⚠️") or contains("Suggestion:") or contains("Issue:") or contains("potential issue"))] | length')
           
           echo "Found $ISSUES issue(s) in comments"
           
