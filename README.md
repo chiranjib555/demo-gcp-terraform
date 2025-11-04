@@ -190,6 +190,115 @@ For AI-powered PR reviews:
 **Enable automatic reviews:** Set `QODO_ENABLED` variable to `true`  
 **Manual reviews only:** Leave `QODO_ENABLED` unset, use `/review` comment or workflow dispatch
 
+### 7. Enable Bot Auto-Approval (Optional)
+
+For automated PR approvals when Qodo finds no issues:
+
+#### **Prerequisites**
+- ✅ Qodo Merge installed (Step 6)
+- ✅ Branch protection enabled with "Require approvals"
+
+#### **Setup Steps**
+
+**A) Create Bot Account:**
+1. Create a new GitHub account (e.g., `bot-stackpro` or `demo-gcp-terraform-bot`)
+2. Add bot as collaborator: **Settings → Collaborators → Add people**
+3. Grant **Write** access to the repository
+4. Bot accepts the invitation
+
+**B) Generate Personal Access Token (PAT):**
+1. **Login to bot account** (use incognito browser)
+2. Go to: **Settings → Developer settings → Personal access tokens → Tokens (classic)**
+3. Click **Generate new token (classic)**
+4. Configure token:
+   - **Note**: `Qodo Auto-Approval - demo-gcp-terraform`
+   - **Expiration**: 90 days (recommended) or No expiration
+   - **Scopes**: ✅ **`repo`** (full control of repositories)
+5. Click **Generate token**
+6. **⚠️ Copy token immediately** (starts with `ghp_...`)
+
+**C) Add Token to Repository Secrets:**
+1. Go to: **Settings → Secrets and variables → Actions → Secrets**
+2. Click **New repository secret** (or **Update** if exists)
+3. Configure:
+   - **Name**: `QODO_APPROVAL_TOKEN`
+   - **Secret**: Paste the PAT from bot account
+4. Click **Add secret**
+
+#### **How It Works**
+
+```
+1. PR created by developer (you)
+      ↓
+2. Qodo reviews automatically
+      ↓
+3. Workflow checks PR author vs bot account
+      ├─ Same user? → Skip approval (GitHub restriction)
+      └─ Different user? → Continue
+      ↓
+4. Check for issues in Qodo review
+      ├─ Issues found (🔴/⚠️)? → Skip approval, add comment
+      └─ No issues? → Bot auto-approves ✅
+      ↓
+5. PR ready to merge (if branch protection requires approval)
+```
+
+#### **Expected Results**
+
+**✅ Success (No Issues):**
+```
+✅ No issues found by Qodo. Auto-approving PR...
+✅ Auto-approved by Qodo Merge - No issues found during automated review.
+```
+- PR shows approval from bot account
+- Can merge immediately (if branch protection enabled)
+
+**⚠️ Issues Found:**
+```
+⚠️ Qodo found 2 issue(s) or suggestion(s). Skipping auto-approval - requires human review.
+```
+- No automatic approval
+- Comment added to PR with issue count
+- Manual review required
+
+**ℹ️ Self-Approval Prevention:**
+```
+⚠️ Cannot auto-approve: PR author (your-username) is the same as the approver.
+ℹ️ To enable auto-approval, use a PAT from a different user account (e.g., a bot account).
+```
+- Prevents GitHub's self-approval restriction
+- Workflow exits gracefully without errors
+
+#### **Troubleshooting**
+
+| Issue | Solution |
+|-------|----------|
+| Bot doesn't approve | Verify `QODO_APPROVAL_TOKEN` secret exists and is from bot account |
+| "Cannot approve own PR" | PAT must be from **different user** than PR author |
+| Bot not a collaborator | Add bot to: Settings → Collaborators with **Write** access |
+| Token expired | Generate new PAT and update `QODO_APPROVAL_TOKEN` secret |
+| Missing `repo` scope | Regenerate token with `repo` scope checked |
+
+#### **Security Best Practices**
+
+- ✅ Use dedicated bot account (not personal account)
+- ✅ Set token expiration (90 days recommended)
+- ✅ Store token only in GitHub Secrets (never in code)
+- ✅ Rotate token regularly
+- ✅ Grant minimum permissions (Write, not Admin)
+- ✅ Monitor bot activity in audit logs
+
+#### **Branch Protection Configuration**
+
+For auto-approval to be useful, enable branch protection:
+
+**Settings → Branches → Add rule:**
+- ✅ **Require a pull request before merging**
+- ✅ **Require approvals** (1 approval required)
+- ✅ **Dismiss stale pull request approvals when new commits are pushed**
+
+This ensures PRs need approval to merge, which the bot provides automatically when checks pass.
+
 ---
 
 ## 🎮 Usage
