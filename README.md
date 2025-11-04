@@ -77,6 +77,7 @@ This project automates the deployment of **SQL Server 2022 Developer Edition** o
 
 - **📜 [Change Log](./CHANGELOG.md)** - Detailed version history, accomplishments, and lessons learned
 - **🔧 [Troubleshooting Guide](./TROUBLESHOOTING.md)** - Common issues and solutions
+- **🌿 [Branch Status Checker](./BRANCH_STATUS.md)** - Check commits ahead/behind between branches
 
 **Latest Version:** 2.0.0 (November 2, 2025)  
 **Status:** ✅ **Production Ready** - All features tested and verified
@@ -577,9 +578,12 @@ demo-gcp-terraform/
 │   ├── get-connection-info.sh           # Get connection info (bash)
 │   ├── get-connection-info-cloud.sh     # Get connection info (Cloud Shell)
 │   └── Get-ConnectionInfo.ps1           # Get connection info (PowerShell)
+├── BRANCH_STATUS.md                     # Git branch status checker documentation
 ├── CHANGELOG.md                         # Version history and accomplishments
 ├── TROUBLESHOOTING.md                   # Common issues and solutions
 ├── README.md                            # Main documentation (this file)
+├── check-branch-status.ps1              # Check git branch commit status (PowerShell)
+├── check-branch-status.sh               # Check git branch commit status (bash)
 ├── check-status.ps1                     # Check VM and SQL Server status
 ├── spinup.ps1                           # Quick VM creation script
 ├── teardown.ps1                         # Quick VM destruction script
@@ -602,6 +606,9 @@ demo-gcp-terraform/
 | **`vm-prep.sh.tftpl`** | VM initialization | Installs Docker, mounts persistent disk at `/mnt/sqldata/mssql/{data,log,secrets}` |
 | **`vm-startup.sh`** | SQL deployment script | Deployed via SSH; pulls SQL Server image, configures volumes, starts container |
 | **`init-database.sql`** | Database initialization | Creates DemoDB, sample tables (Customers, Products, Orders), and ci_user |
+| **`check-branch-status.ps1`** | Git branch status checker (PowerShell) | Compare branches, show ahead/behind commits, provide sync suggestions |
+| **`check-branch-status.sh`** | Git branch status checker (bash) | Cross-platform branch comparison with color-coded output |
+| **`BRANCH_STATUS.md`** | Branch status documentation | Usage guide and examples for branch status scripts |
 | **`CHANGELOG.md`** | Version history | Detailed accomplishments, issues resolved, lessons learned |
 | **`TROUBLESHOOTING.md`** | Issue resolution guide | Common problems with step-by-step solutions |
 
