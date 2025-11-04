@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 # Default parameters
 BASE_BRANCH="${1:-main}"
@@ -47,7 +48,7 @@ echo ""
 
 # Fetch latest changes from remote
 echo -e "${YELLOW}🔄 Fetching latest changes from remote...${NC}"
-if git fetch --all 2>&1 > /dev/null; then
+if git fetch --all >/dev/null 2>&1; then
     echo -e "  ${GREEN}✅ Fetch complete${NC}"
 else
     echo -e "  ${YELLOW}⚠️  Warning: Could not fetch from remote.${NC}"
@@ -82,8 +83,7 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-BEHIND=$(echo $COUNTS | cut -d' ' -f1)
-AHEAD=$(echo $COUNTS | cut -d' ' -f2)
+read -r BEHIND AHEAD <<< "$COUNTS"
 
 echo -e "${YELLOW}📈 Branch Status:${NC}"
 echo ""
