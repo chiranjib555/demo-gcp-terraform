@@ -585,7 +585,7 @@ demo-gcp-terraform/
 ├── teardown.ps1                         # Quick VM destruction script
 └── update-ip.ps1                        # Update firewall for new IP
 ```
----------------------------------------------------Testing-----------------------------------------------------------------------------------------------------------------------
+
 ### Key Files Explained
 
 | File | Purpose | Key Features |
