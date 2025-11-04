@@ -74,6 +74,19 @@ jobs:
         run: |
           echo "Checking for issues in Qodo review..."
           
+          # Check if PR author is different from the actor (PAT owner)
+          PR_AUTHOR="${{ github.event.pull_request.user.login }}"
+          CURRENT_ACTOR="${{ github.actor }}"
+          
+          echo "PR Author: $PR_AUTHOR"
+          echo "Current Actor: $CURRENT_ACTOR"
+          
+          if [ "$PR_AUTHOR" = "$CURRENT_ACTOR" ]; then
+            echo "⚠️ Cannot auto-approve: PR author ($PR_AUTHOR) is the same as the approver. GitHub doesn't allow self-approval."
+            echo "ℹ️ To enable auto-approval, use a PAT from a different user account (e.g., a bot account)."
+            exit 0
+          fi
+          
           # Wait a bit for Qodo to finish posting comments
           sleep 10
           
