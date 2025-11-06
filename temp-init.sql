@@ -17,7 +17,8 @@ GO
 -- Create login at server level if it doesn't exist
 IF NOT EXISTS (SELECT name FROM sys.server_principals WHERE name = N'ci_user')
 BEGIN
-    CREATE LOGIN [ci_user] WITH PASSWORD = N'ChangeMe_UseStrongPwd#2025!', CHECK_POLICY=OFF;
+    -- Note: Replace $(CI_PASSWORD) with your actual password variable if using a different mechanism.
+    CREATE LOGIN [ci_user] WITH PASSWORD = N'$(CI_PASSWORD)', CHECK_POLICY=OFF;
     PRINT 'Login ci_user created.';
 END
 ELSE
