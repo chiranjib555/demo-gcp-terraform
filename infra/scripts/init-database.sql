@@ -21,7 +21,7 @@ GO
 -- Create login at server level if it doesn't exist
 IF NOT EXISTS (SELECT name FROM sys.server_principals WHERE name = N'ci_user')
 BEGIN
-    CREATE LOGIN [ci_user] WITH PASSWORD = N'$(CI_PASSWORD)';
+    CREATE LOGIN [ci_user] WITH PASSWORD = N'$(CI_PASSWORD)', CHECK_POLICY=OFF;
     PRINT 'Login ci_user created.';
 END
 ELSE
