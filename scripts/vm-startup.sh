@@ -150,12 +150,15 @@ if [ "${SKIP_INIT}" != "true" ]; then
   log "Verifying deployment..."
   docker exec "${CONTAINER_NAME}" /opt/mssql-tools18/bin/sqlcmd \
     -S localhost -U SA -P "${SA_PASSWORD}" -C \
-    -Q "SELECT name, database_id, create_date FROM sys.databases WHERE name = N'DemoDB';
-        SELECT name, type_desc FROM sys.database_principals WHERE name = N'ci_user';"
+    -Q "SELECT name, database_id, create_date FROM sys.databases WHERE name = N'DemoDB';"
   
-  # Cleanup
-  docker exec "${CONTAINER_NAME}" rm -f /tmp/init-database.sql
-  rm -f /tmp/init-database.sql
+  docker exec "${CONTAINER_NAME}" /opt/mssql-tools18/bin/sqlcmd \
+    -S localhost -U SA -P "${SA_PASSWORD}" -C -d DemoDB \
+    -Q "SELECT name, type_desc FROM sys.database_principals WHERE name = N'ci_user';"
+  
+  # Cleanup (use || true to ignore errors)
+  docker exec "${CONTAINER_NAME}" rm -f /tmp/init-database.sql || true
+  rm -f /tmp/init-database.sql || true
 fi
 
 log "=== ✅ SQL Server deployment complete ==="
