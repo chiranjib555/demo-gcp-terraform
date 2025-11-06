@@ -17,7 +17,7 @@ variable "zone" {
 
 variable "admin_ip_cidr" {
   type        = string
-  description = "Your public IP in CIDR, e.g., 203.0.113.10/32"
+  description = "Your public IP in CIDR notation. Use /32 for single IP, /24 for subnet (256 IPs), or 'auto' for auto-detection"
 }
 
 variable "sql_admin_login" {
