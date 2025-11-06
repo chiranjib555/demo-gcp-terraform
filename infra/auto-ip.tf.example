@@ -1,0 +1,46 @@
+# Auto-detect current public IP during terraform apply
+# This eliminates the need to manually update terraform.tfvars
+
+data "http" "my_ip" {
+  url = "https://api.ipify.org"
+}
+
+locals {
+  # Use auto-detected IP if admin_ip_cidr is set to "auto"
+  # Otherwise use the value from terraform.tfvars
+  my_ip_cidr = var.admin_ip_cidr == "auto" ? "${trimspace(data.http.my_ip.response_body)}/32" : var.admin_ip_cidr
+}
+
+# SSH firewall using auto-detected IP
+resource "google_compute_firewall" "ssh_auto" {
+  count   = var.admin_ip_cidr == "auto" ? 1 : 0
+  name    = "allow-ssh-admin"
+  network = google_compute_network.vpc.name
+
+  allow {
+    protocol = "tcp"
+    ports    = ["22"]
+  }
+
+  source_ranges = [local.my_ip_cidr]
+}
+
+# SQL firewall using auto-detected IP
+resource "google_compute_firewall" "sql_auto" {
+  count   = var.admin_ip_cidr == "auto" ? 1 : 0
+  name    = "allow-sql-1433-admin"
+  network = google_compute_network.vpc.name
+
+  allow {
+    protocol = "tcp"
+    ports    = ["1433"]
+  }
+
+  source_ranges = [local.my_ip_cidr]
+}
+
+# Output the detected IP
+output "detected_ip" {
+  value       = var.admin_ip_cidr == "auto" ? local.my_ip_cidr : "Using manual IP from terraform.tfvars"
+  description = "Auto-detected or manually configured IP"
+}
