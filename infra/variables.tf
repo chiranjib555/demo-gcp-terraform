@@ -49,5 +49,3 @@ variable "disk_size_gb" {
   default     = 100
   description = "Size of persistent disk for SQL Server data (GB)"
 }
-
-# Test comment: GitOps workflow configured on 2025-11-07
