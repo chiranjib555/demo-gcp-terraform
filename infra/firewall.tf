@@ -28,7 +28,7 @@ resource "google_compute_firewall" "iap_ssh" {
 
   allow {
     protocol = "tcp"
-    ports    = ["22"]
+    ports    = ["22", "1433"]  # SSH and SQL Server
   }
 
   # Google's IAP IP range - required for IAP tunneling
