@@ -10,20 +10,22 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Creating IAP tunnel to SQL Server..." -ForegroundColor Yellow
 Write-Host ""
+Write-Host "NOTE: Using port 51433 (port 1433 is in use locally)" -ForegroundColor Magenta
+Write-Host ""
 Write-Host "Connect with:" -ForegroundColor Green
-Write-Host "  Server:   localhost,1433" -ForegroundColor White
+Write-Host "  Server:   localhost,51433" -ForegroundColor White
 Write-Host "  Database: DemoDB" -ForegroundColor White
 Write-Host "  User:     ci_user" -ForegroundColor White
 Write-Host "  Password: ChangeMe_UseStrongPwd#2025!" -ForegroundColor White
 Write-Host ""
 Write-Host "Connection String:" -ForegroundColor Green
-Write-Host "  Server=localhost,1433;Database=DemoDB;User Id=ci_user;Password=ChangeMe_UseStrongPwd#2025!;TrustServerCertificate=True;" -ForegroundColor Cyan
+Write-Host "  Server=localhost,51433;Database=DemoDB;User Id=ci_user;Password=ChangeMe_UseStrongPwd#2025!;TrustServerCertificate=True;" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Press Ctrl+C to stop the tunnel" -ForegroundColor Yellow
 Write-Host ""
 
-# Create IAP tunnel: localhost:1433 -> VM:1433
+# Create IAP tunnel: localhost:51433 -> VM:1433
 gcloud compute start-iap-tunnel sql-linux-vm 1433 `
-    --local-host-port=localhost:1433 `
+    --local-host-port=localhost:51433 `
     --zone=us-central1-a `
     --project=praxis-gantry-475007-k0
