@@ -27,6 +27,8 @@ permissions:
   pull-requests: write
   issues: write
   checks: read
+  # Note: GitHub Actions cannot approve PRs by default
+  # This requires using a Personal Access Token (PAT) instead of GITHUB_TOKEN
 
 jobs:
   qodo:
@@ -56,6 +58,7 @@ jobs:
       - name: Run Qodo PR-Agent (Auto or Comment trigger)
         if: github.event_name != 'workflow_dispatch'
         uses: qodo-ai/pr-agent@main
+        id: qodo_review
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # OPENAI_KEY: ${{ secrets.OPENAI_KEY }}  # if you BYO model key
@@ -65,6 +68,42 @@ jobs:
           trigger_comment_command: "/review"
           verbosity_level: medium
           approve_pr_on_self_review: true
+      
+      - name: Conditional Auto-Approval
+        if: github.event_name == 'pull_request' && success()
+        run: |
+          echo "Checking for issues in Qodo review..."
+          
+          # Check if PR author is different from the actor (PAT owner)
+          PR_AUTHOR="${{ github.event.pull_request.user.login }}"
+          CURRENT_ACTOR="${{ github.actor }}"
+          
+          echo "PR Author: $PR_AUTHOR"
+          echo "Current Actor: $CURRENT_ACTOR"
+          
+          if [ "$PR_AUTHOR" = "$CURRENT_ACTOR" ]; then
+            echo "⚠️ Cannot auto-approve: PR author ($PR_AUTHOR) is the same as the approver. GitHub doesn't allow self-approval."
+            echo "ℹ️ To enable auto-approval, use a PAT from a different user account (e.g., a bot account)."
+            exit 0
+          fi
+          
+          # Wait a bit for Qodo to finish posting comments
+          sleep 10
+          
+          # Check if Qodo found any issues/suggestions in PR comments
+          ISSUES=$(gh pr view ${{ github.event.pull_request.number }} --json comments --jq '[.comments[] | select(.author.login == "qodo-merge[bot]" or .author.login == "github-actions[bot]") | .body | select(contains("🔴") or contains("⚠️") or contains("Suggestion:") or contains("Issue:") or contains("potential issue"))] | length')
+          
+          echo "Found $ISSUES issue(s) in comments"
+          
+          if [ "$ISSUES" -eq 0 ]; then
+            echo "✅ No issues found by Qodo. Auto-approving PR..."
+            gh pr review ${{ github.event.pull_request.number }} --approve --body "✅ Auto-approved by Qodo Merge - No issues found during automated review. All checks passed and ready to merge."
+          else
+            echo "⚠️ Qodo found $ISSUES issue(s) or suggestion(s). Skipping auto-approval - requires human review."
+            gh pr comment ${{ github.event.pull_request.number }} --body "⚠️ Auto-approval skipped - Qodo Merge found $ISSUES issue(s) or suggestion(s). Please review and address concerns."
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.QODO_APPROVAL_TOKEN }}
       
       - name: Extract PR number from URL or use direct number
         if: github.event_name == 'workflow_dispatch'

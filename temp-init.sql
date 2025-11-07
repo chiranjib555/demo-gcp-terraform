@@ -1,7 +1,4 @@
--- init-database.sql
--- Idempotent SQL Server initialization script
--- Creates database, login, user, and grants permissions
-
+-- Quick database initialization script
 -- Create database if it doesn't exist
 IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = N'DemoDB')
 BEGIN
@@ -14,14 +11,13 @@ BEGIN
 END
 GO
 
--- Switch to the database
 USE [DemoDB];
 GO
 
 -- Create login at server level if it doesn't exist
 IF NOT EXISTS (SELECT name FROM sys.server_principals WHERE name = N'ci_user')
 BEGIN
-    CREATE LOGIN [ci_user] WITH PASSWORD = N'$(CI_PASSWORD)', CHECK_POLICY=OFF;
+    CREATE LOGIN [ci_user] WITH PASSWORD = N'ChangeMe_UseStrongPwd#2025!', CHECK_POLICY=OFF;
     PRINT 'Login ci_user created.';
 END
 ELSE
@@ -54,25 +50,5 @@ BEGIN
 END
 GO
 
--- Optional: Create a sample table to verify deployment
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[DeploymentLog]') AND type in (N'U'))
-BEGIN
-    CREATE TABLE [dbo].[DeploymentLog] (
-        [Id] INT IDENTITY(1,1) PRIMARY KEY,
-        [DeployedAt] DATETIME2 DEFAULT GETDATE(),
-        [Version] NVARCHAR(50),
-        [Notes] NVARCHAR(MAX)
-    );
-    PRINT 'Created DeploymentLog table.';
-END
-ELSE
-BEGIN
-    PRINT 'DeploymentLog table already exists.';
-END
-GO
-
--- Log this deployment
-INSERT INTO [dbo].[DeploymentLog] ([Version], [Notes])
-VALUES (N'$(VERSION)', N'Deployed via GitHub Actions');
-PRINT 'Deployment logged.';
+PRINT 'Database initialization complete!';
 GO
