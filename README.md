@@ -1,19 +1,21 @@
-# GCP SQL Server Infrastructure with Automated Deployment
+# GCP SQL Server Infrastructure with IAP-Only Access
 
 [![Terraform](https://img.shields.io/badge/Terraform-1.7.0-623CE4?logo=terraform)](https://www.terraform.io/)
 [![GCP](https://img.shields.io/badge/GCP-Cloud-4285F4?logo=google-cloud)](https://cloud.google.com/)
 [![SQL Server](https://img.shields.io/badge/SQL%20Server-2022-CC2927?logo=microsoft-sql-server)](https://www.microsoft.com/sql-server)
+[![IAP](https://img.shields.io/badge/Access-IAP%20Only-success)](https://cloud.google.com/iap)
 
-This project automates the deployment of **SQL Server 2022 Developer Edition** on **Google Cloud Platform** using **Terraform** and **GitHub Actions**. The infrastructure uses persistent storage and static IPs to ensure data stability across VM lifecycle operations, with cost-optimized tear-down/spin-up workflows.
+This project automates the deployment of **SQL Server 2022 Developer Edition** on **Google Cloud Platform** using **Terraform** and **GitHub Actions**. The infrastructure uses **IAP-only access** (no IP maintenance needed!), persistent storage, and static IPs to ensure data stability across VM lifecycle operations, with cost-optimized tear-down/spin-up workflows.
 
 ## 🎯 Key Features
 
-- **🔄 Automated VM Lifecycle**: Create/destroy VMs via GitHub Actions workflows ✅ **VERIFIED**
-- **💾 Persistent Data**: 100GB SSD disk with proper subdirectory structure survives VM destruction ✅ **TESTED**
+- **🔄 Automated VM Lifecycle**: Create/destroy VMs via GitHub Actions workflows or PowerShell scripts ✅ **VERIFIED**
+- **💾 Persistent Data**: 130GB SSD disk with proper subdirectory structure survives VM destruction ✅ **TESTED**
 - **🌐 Static IP**: Stable connection endpoint across rebuilds ✅ **WORKING**
 - **🐳 Containerized SQL Server**: Docker-based SQL Server 2022 deployment ✅ **DEPLOYED**
-- **🔐 Secure Access**: IAP tunneling, service account authentication, firewall rules ✅ **CONFIGURED**
-- **🤖 AI-Powered PR Reviews**: Qodo Merge integration for code quality ✅ **ENABLED**
+- **� IAP-Only Access**: Connect from ANY IP without firewall maintenance ✅ **NEW & RECOMMENDED**
+- **🔐 Flexible Access**: Toggle between IAP tunnel and public access modes ✅ **CONFIGURED**
+- **🤖 AI-Powered PR Reviews**: Qodo Merge integration with auto-approval ✅ **ENABLED**
 - **💰 Cost Optimized**: Tear down VMs when not in use, preserve data ✅ **IMPLEMENTED**
 - **🗄️ Sample Database**: DemoDB with Customers, Products, Orders, OrderDetails tables ✅ **POPULATED**
 - **👤 Multi-User Support**: SA admin + ci_user application account ✅ **CREATED**
@@ -26,9 +28,9 @@ This project automates the deployment of **SQL Server 2022 Developer Edition** o
 ┌──────────────────────────────────────────────────────────────────┐
 │  GitHub Actions Workflows                                        │
 │  ├─ manage-vm-lifecycle.yml   (Create/Destroy VM)               │
-│  ├─ deploy-sql-startup.yml    (Deploy SQL Server via SSH)       │
+│  ├─ deploy-sql-startup.yml    (Deploy SQL Server via IAP)       │
 │  ├─ get-connection-info.yml   (Retrieve connection details)     │
-│  └─ qodo-merge.yml            (AI PR Reviews)                   │
+│  └─ qodo-merge.yml            (AI PR Reviews + Auto-Approval)   │
 └────────────────┬─────────────────────────────────────────────────┘
                  │ GCP Authentication (Service Account)
                  ▼
@@ -36,36 +38,57 @@ This project automates the deployment of **SQL Server 2022 Developer Edition** o
 │  Google Cloud Platform (praxis-gantry-475007-k0)                │
 │  ├─ Region: us-central1-a                                        │
 │  ├─ Service Accounts:                                            │
-│  │  ├─ github-actions-deployer (Terraform + SSH)                │
-│  │  └─ vm-runtime (Secret Manager access)                       │
-│  ├─ VPC Network: sql-vpc                                         │
-│  └─ Firewall Rules: SSH (IAP), SQL (Admin IP)                   │
+│  │  ├─ github-actions-deployer (Terraform + IAP SSH)            │
+│  │  └─ vm-runtime (Logging/Monitoring)                          │
+│  ├─ VPC Network: demo-vpc                                        │
+│  └─ Firewall Rules: IAP (SSH + SQL tunneling) ✅ IAP-ONLY       │
 └────────────────┬─────────────────────────────────────────────────┘
                  │
                  ▼
 ┌──────────────────────────────────────────────────────────────────┐
 │  Compute VM: sql-linux-vm (e2-standard-2, Debian 11)            │
-│  ├─ Static IP: <your-static-ip> (prevent_destroy = true) ✅    │
-│  ├─ Persistent Disk: /mnt/sqldata (100GB SSD, auto-reattach)    │
+│  ├─ Static IP: 34.57.37.222 (prevent_destroy = true) ✅         │
+│  ├─ Persistent Disk: /mnt/sqldata (130GB SSD, auto-reattach)    │
 │  │  └─ /mnt/sqldata/mssql/{data,log,secrets} ✅ VERIFIED        │
 │  ├─ Startup Script: vm-prep.sh.tftpl                            │
 │  │  └─ Installs Docker, creates subdirectory structure          │
-│  └─ SQL Server 2022 Container (deployed via SSH workflow) ✅    │
-│     ├─ Port: 1433 (accessible from admin IP)                    │
+│  └─ SQL Server 2022 Container (deployed via IAP workflow) ✅    │
+│     ├─ Port: 1433 (IAP tunnel only - no public access)          │
 │     ├─ Data: /var/opt/mssql/data → /mnt/sqldata/mssql/data      │
 │     ├─ Logs: /var/opt/mssql/log → /mnt/sqldata/mssql/log        │
 │     ├─ Secrets: /var/opt/mssql/secrets → /mnt/sqldata/mssql/secrets │
 │     ├─ Users: SA (admin) + ci_user (db_owner)                   │
 │     └─ Database: DemoDB with sample data ✅ TESTED VIA SSMS     │
 └──────────────────────────────────────────────────────────────────┘
+                 │
+                 ▼ IAP Tunnel (localhost:51433)
+┌──────────────────────────────────────────────────────────────────┐
+│  Your Local Machine - Connect from ANY IP!                      │
+│  ├─ SQL Tunnel: .\sql-tunnel-iap.ps1 (no IP updates needed!)    │
+│  ├─ SSH Access: .\ssh-iap.ps1 (works from anywhere!)            │
+│  └─ Optional: .\enable-sql-public-access.ps1 (temp access)      │
+└──────────────────────────────────────────────────────────────────┘
 ```
+
+### 🛡️ Access Modes
+
+**🔒 IAP-Only Mode (Current - Recommended):**
+- ✅ Connect from ANY IP address
+- ✅ No firewall maintenance
+- ✅ More secure (Google-managed)
+- ✅ Use: `.\sql-tunnel-iap.ps1` or `.\ssh-iap.ps1`
+
+**🌐 Public Access Mode (Temporary):**
+- ⚠️ Enable when needed: `.\enable-sql-public-access.ps1`
+- ⚠️ Requires IP in firewall
+- ⚠️ Disable after use: `.\disable-sql-public-access.ps1`
 
 ### 🛡️ What Survives VM Destruction?
 
 | Resource | Survives Rebuild? | Cost When VM Destroyed |
 |----------|-------------------|------------------------|
 | **Static IP** (`google_compute_address.sqlvm_ip`) | ✅ Yes | ~$0.01/hour (~$7/month) |
-| **Persistent Disk** (`google_compute_disk.sql_data`) | ✅ Yes | ~$0.17/GB/month (~$17 for 100GB) |
+| **Persistent Disk** (`google_compute_disk.sql_data`) | ✅ Yes | ~$0.17/GB/month (~$22 for 130GB) |
 | **SQL Server Data** | ✅ Yes | Included in disk cost |
 | **VPC & Firewall** | ✅ Yes | Free |
 | **VM Instance** | ❌ No | $0 (destroyed) |
@@ -76,11 +99,13 @@ This project automates the deployment of **SQL Server 2022 Developer Edition** o
 ## 📚 Documentation
 
 - **📜 [Change Log](./CHANGELOG.md)** - Detailed version history, accomplishments, and lessons learned
-- **🔧 [Troubleshooting Guide](./TROUBLESHOOTING.md)** - Common issues and solutions
+- **� [IAP Access Guide](./IAP-ACCESS-GUIDE.md)** - How to use IAP tunneling (works from any IP!)
+- **�🔧 [Troubleshooting Guide](./TROUBLESHOOTING.md)** - Common issues and solutions
+- **🚀 [Deployment Ready](./DEPLOYMENT_READY.md)** - Infrastructure status and deployment guide
 - **🌿 [Branch Status Checker](./BRANCH_STATUS.md)** - Check commits ahead/behind between branches
 
 **Latest Version:** 2.0.0 (November 2, 2025)  
-**Status:** ✅ **Production Ready** - All features tested and verified
+**Status:** ✅ **Production Ready** - All features tested and verified with IAP-only access
 
 ---
 
@@ -128,9 +153,9 @@ terraform apply
 ```
 
 **Key Terraform Outputs:**
-- `sqlvm_external_ip` - Static IP for SQL Server (stays constant)
+- `sqlvm_external_ip` - Static IP for SQL Server (34.57.37.222)
 - `github_actions_sa_email` - Service account for GitHub Actions
-- `vm_runtime_sa_email` - Service account for VM (Secret Manager access)
+- `vm_runtime_sa_email` - Service account for VM (Logging/Monitoring access)
 
 ### 4. Configure GitHub Secrets
 
@@ -176,8 +201,8 @@ gcloud projects get-iam-policy praxis-gantry-475007-k0 \
 - ✅ `roles/compute.securityAdmin` - Firewall rules
 - ✅ `roles/iam.serviceAccountAdmin` - Service account management
 - ✅ `roles/iam.serviceAccountKeyAdmin` - SA key creation
-- ✅ `roles/iap.tunnelResourceAccessor` - SSH via IAP
-- ✅ `roles/secretmanager.secretAccessor` - Read SQL passwords
+- ✅ `roles/iap.tunnelResourceAccessor` - SSH via IAP (IAP-only access mode)
+- ✅ `roles/compute.osLogin` - OS Login for IAP tunneling
 
 ### 6. Install Qodo Merge (Optional)
 
@@ -428,35 +453,87 @@ terraform output
 
 ## 🔌 Connecting to SQL Server
 
+### 🔒 IAP Tunnel Connection (Recommended - Works from Any IP!)
+
+**No firewall maintenance needed! Connect from anywhere.**
+
+**Step 1: Start the IAP tunnel** (in one terminal)
+```powershell
+# This creates a tunnel: localhost:51433 -> VM:1433
+.\sql-tunnel-iap.ps1
+```
+
+**Step 2: Connect with your SQL client**
+- **Server:** `localhost,51433`
+- **Database:** `DemoDB`
+- **Authentication:** SQL Server Authentication
+- **User:** `ci_user` (for application) or `sa` (for admin)
+- **Password:** From your `terraform.tfvars`
+
+**Connection String:**
+```
+Server=localhost,51433;Database=DemoDB;User Id=ci_user;Password=<your-password>;TrustServerCertificate=True;
+```
+
+**Using SSMS:**
+1. Server name: `localhost,51433`
+2. Authentication: **SQL Server Authentication**
+3. Login: `ci_user`
+4. Password: `<your-ci-user-password>`
+5. ✅ **Works from any network** - home, office, coffee shop!
+
+---
+
+### 🌐 Direct Public Access (Optional - When IAP has issues)
+
+**Enable temporarily:**
+```powershell
+.\enable-sql-public-access.ps1  # Creates temporary firewall rule
+```
+
+**Connect directly:**
+- **Server:** `34.57.37.222,1433`
+- **Database:** `DemoDB`
+- **User:** `ci_user` or `sa`
+- **Password:** From your `terraform.tfvars`
+
+**Disable after use:**
+```powershell
+.\disable-sql-public-access.ps1  # Removes firewall rule
+```
+
+---
+
 ### Connection Details
 
 **Server Information:**
-- **Host:** `<your-static-ip>` (Static IP - never changes) ✅
-- **Port:** `1433` ✅
+- **Static IP:** `34.57.37.222` ✅ Never changes
+- **Port (via IAP tunnel):** `51433` (local) → `1433` (VM) ✅
+- **Port (public access):** `1433` (requires `enable-sql-public-access.ps1`)
 - **Authentication:** SQL Server Authentication ✅
 - **User:** `sa` (full admin) or `ci_user` (db_owner permissions) ✅
-- **Password:** Stored in GitHub Secrets / GCP Secret Manager ✅
 - **Database:** `DemoDB` (with sample Customers, Products, Orders, OrderDetails tables) ✅
 
-> **Note:** Get your static IP with: `terraform output sqlvm_external_ip` or check GCP Console
+> **Note:** Port 51433 is used locally to avoid conflicts with local SQL Server instances on port 1433
 
-**✅ VERIFIED WORKING:** Successfully tested external client connection
+**✅ VERIFIED WORKING:** Successfully tested IAP tunnel connection from multiple networks
 
 ### Connection Strings
 
-**ADO.NET:**
+**ADO.NET (via IAP tunnel):**
 ```csharp
-Server=<your-static-ip>,1433;Database=master;User Id=sa;Password=<your-password>;TrustServerCertificate=True;Encrypt=True;
+Server=localhost,51433;Database=master;User Id=sa;Password=<your-password>;TrustServerCertificate=True;Encrypt=True;
 ```
 
-**JDBC:**
+**JDBC (via IAP tunnel):**
 ```java
-jdbc:sqlserver://<your-static-ip>:1433;databaseName=master;user=sa;password=<your-password>;encrypt=true;trustServerCertificate=true;
+jdbc:sqlserver://localhost:51433;databaseName=master;user=sa;password=<your-password>;encrypt=true;trustServerCertificate=true;
 ```
 
-**PowerShell (SqlClient):**
+**PowerShell (SqlClient via IAP tunnel):**
 ```powershell
-$connectionString = "Server=<your-static-ip>,1433;Database=master;User Id=sa;Password=<your-password>;TrustServerCertificate=True;"
+# Start tunnel first: .\sql-tunnel-iap.ps1
+$connectionString = "Server=localhost,51433;Database=master;User Id=sa;Password=<your-password>;TrustServerCertificate=True;"
 $connection = New-Object System.Data.SqlClient.SqlConnection($connectionString)
 $connection.Open()
 $command = $connection.CreateCommand()
@@ -467,15 +544,16 @@ $connection.Close()
 ```
 
 **SQL Server Management Studio (SSMS):** ✅ **TESTED AND WORKING**
-1. Server type: **Database Engine**
-2. Server name: `<your-static-ip>,1433`
-3. Authentication: **SQL Server Authentication**
-4. Login: `ci_user` (for application access) or `sa` (for admin)
-5. Password: `<your-ci-user-password>` (for ci_user) or your SA password
-6. Encryption: **Optional** (or uncheck "Encrypt connection")
-7. ✅ **Successfully connected and verified DemoDB database accessible**
+1. **Start IAP tunnel:** Open PowerShell → Run `.\sql-tunnel-iap.ps1` (keep running)
+2. Server type: **Database Engine**
+3. Server name: `localhost,51433`
+4. Authentication: **SQL Server Authentication**
+5. Login: `ci_user` (for application access) or `sa` (for admin)
+6. Password: `<your-ci-user-password>` (for ci_user) or your SA password
+7. Encryption: **Optional** (or uncheck "Encrypt connection")
+8. ✅ **Successfully connected and verified DemoDB database accessible**
 
-> **Security Note:** Never commit passwords to version control. Use GCP Secret Manager or GitHub Secrets.
+> **Security Note:** Never commit passwords to version control. Use environment variables or secure storage.
 
 **Sample Query to Verify Connection:**
 ```sql
@@ -497,11 +575,21 @@ ORDER BY o.OrderDate DESC;
 
 ### Test Connection from Command Line
 
-**Using sqlcmd (from VM):**
-```bash
-gcloud compute ssh sql-linux-vm --zone=us-central1-a --tunnel-through-iap
+**Using sqlcmd (via IAP tunnel from local machine):**
+```powershell
+# Terminal 1: Start tunnel
+.\sql-tunnel-iap.ps1
 
-# Inside VM
+# Terminal 2: Run sqlcmd
+sqlcmd -S localhost,51433 -U ci_user -P '<your-password>' -d DemoDB -Q "SELECT * FROM Customers;"
+```
+
+**Using sqlcmd (from VM via SSH):**
+```bash
+# SSH to VM via IAP
+.\ssh-iap.ps1
+
+# Inside VM - connect locally
 sudo docker exec -it mssql /opt/mssql-tools18/bin/sqlcmd \
   -S localhost \
   -U sa \
@@ -515,9 +603,11 @@ sudo docker exec -it mssql /opt/mssql-tools18/bin/sqlcmd \
 # Install SqlServer module if not already installed
 Install-Module -Name SqlServer -Scope CurrentUser
 
+# Start tunnel in another terminal first: .\sql-tunnel-iap.ps1
+
 # Query SQL Server
-Invoke-Sqlcmd -ServerInstance "34.57.37.222,1433" `
-  -Username "sa" `
+Invoke-Sqlcmd -ServerInstance "localhost,51433" `
+  -Username "ci_user" `
   -Password "YOUR_PASSWORD" `
   -Query "SELECT @@VERSION" `
   -TrustServerCertificate
@@ -525,24 +615,32 @@ Invoke-Sqlcmd -ServerInstance "34.57.37.222,1433" `
 
 ### Firewall Access
 
-By default, SQL Server port 1433 is **only accessible from your admin IP** (configured in `terraform.tfvars`).
+**With IAP-Only Mode (Current):**
+- ✅ **No IP maintenance needed!**
+- ✅ Works from ANY network
+- ✅ Use `.\sql-tunnel-iap.ps1` to connect
+- ✅ More secure (Google-managed authentication)
 
-**Check your current IP:**
+**For Temporary Public Access:**
+
+If you need direct access without IAP tunnel:
+
+1. **Enable public access:**
 ```powershell
-(Invoke-WebRequest -Uri "https://ifconfig.me" -UseBasicParsing).Content
+.\enable-sql-public-access.ps1
 ```
 
-**Update allowed IP in Terraform:**
-```hcl
-# infra/terraform.tfvars
-admin_ip_cidr = "YOUR_NEW_IP/32"
+2. **Connect directly:**
+```
+Server: 34.57.37.222,1433
 ```
 
-Then apply changes:
-```bash
-cd infra
-terraform apply -target=google_compute_firewall.allow_sql_1433_admin
+3. **Disable after use:**
+```powershell
+.\disable-sql-public-access.ps1
 ```
+
+> **💡 Tip:** IAP tunnel is recommended for security and convenience. No IP changes mean no firewall updates!
 
 ---
 
@@ -553,31 +651,32 @@ demo-gcp-terraform/
 ├── .github/
 │   └── workflows/
 │       ├── manage-vm-lifecycle.yml      # Create/destroy VM with resource imports
-│       ├── deploy-sql-startup.yml       # Deploy SQL Server container via SSH
+│       ├── deploy-sql-startup.yml       # Deploy SQL Server container via IAP
 │       ├── get-connection-info.yml      # Retrieve VM connection information
-│       └── qodo-merge.yml               # AI-powered PR reviews
+│       └── qodo-merge.yml               # AI-powered PR reviews + auto-approval
 ├── docs/
 │   ├── CLOUD-SHELL-CONNECTION-INFO.md   # Cloud Shell connection guide
 │   └── VM-LIFECYCLE-MANAGEMENT.md       # VM lifecycle documentation
 ├── infra/
 │   ├── providers.tf                     # Terraform & GCP provider config
-│   ├── compute.sql-linux.tf             # VM definition with persistent disk & attached disk
-│   ├── firewall.tf                      # Firewall rules (SSH from IAP, SQL from admin IP)
+│   ├── compute.sql-linux.tf             # VM definition with persistent disk (can be commented for destroy)
+│   ├── firewall.tf                      # Firewall rules (IAP-only mode)
 │   ├── github-actions-sa.tf             # GitHub Actions service account
-│   ├── vm-runtime-sa.tf                 # VM runtime service account (Secret Manager access)
+│   ├── vm-runtime-sa.tf                 # VM runtime service account
 │   ├── vpc.tf                           # VPC network and subnet
 │   ├── variables.tf                     # Input variables
 │   ├── outputs.tf                       # Outputs (IPs, SA emails)
 │   ├── terraform.tfvars                 # Your configuration (gitignored)
 │   └── scripts/
 │       ├── vm-prep.sh.tftpl             # VM startup script (Docker install, disk mount)
-│       ├── linux-first-boot.sh.tftpl    # All-in-one startup script (alternative)
 │       └── init-database.sql            # Database initialization SQL
 ├── scripts/
-│   ├── vm-startup.sh                    # SQL Server deployment script (run via SSH)
+│   ├── vm-startup.sh                    # SQL Server deployment script (run via IAP)
 │   ├── get-connection-info.sh           # Get connection info (bash)
 │   ├── get-connection-info-cloud.sh     # Get connection info (Cloud Shell)
 │   └── Get-ConnectionInfo.ps1           # Get connection info (PowerShell)
+├── IAP-ACCESS-GUIDE.md                  # IAP tunneling guide (recommended!)
+├── DEPLOYMENT_READY.md                  # Infrastructure status and setup
 ├── BRANCH_STATUS.md                     # Git branch status checker documentation
 ├── CHANGELOG.md                         # Version history and accomplishments
 ├── TROUBLESHOOTING.md                   # Common issues and solutions
@@ -587,7 +686,12 @@ demo-gcp-terraform/
 ├── check-status.ps1                     # Check VM and SQL Server status
 ├── spinup.ps1                           # Quick VM creation script
 ├── teardown.ps1                         # Quick VM destruction script
-└── update-ip.ps1                        # Update firewall for new IP
+├── sql-tunnel-iap.ps1                   # Create SQL tunnel via IAP (recommended!)
+├── ssh-iap.ps1                          # SSH to VM via IAP
+├── enable-sql-public-access.ps1         # Enable temporary public SQL access
+├── disable-sql-public-access.ps1        # Disable public SQL access
+├── test-sql-connection.ps1              # Test SQL connection via tunnel
+└── update-ip.ps1                        # Update firewall for new IP (legacy)
 ```
 
 ### Key Files Explained
@@ -597,18 +701,25 @@ demo-gcp-terraform/
 | **`manage-vm-lifecycle.yml`** | VM create/destroy automation | Imports existing resources before apply to avoid conflicts; supports manual trigger with action selection |
 | **`deploy-sql-startup.yml`** | SQL Server deployment | SSH via IAP; copies and executes `vm-startup.sh`; always recreates container with fresh password |
 | **`get-connection-info.yml`** | Connection info retrieval | Displays VM IP, SSH commands, and SQL connection strings |
-| **`qodo-merge.yml`** | AI code review integration | Three trigger modes (auto/comment/manual); supports PR URL or number input |
-| **`compute.sql-linux.tf`** | VM resource definition | e2-standard-2 instance; attaches persistent disk; service account with cloud-platform scope |
-| **`firewall.tf`** | Firewall rules | SSH via IAP tunnel; SQL Server port 1433 restricted to admin IP |
+| **`qodo-merge.yml`** | AI code review integration | Three trigger modes (auto/comment/manual); auto-approval when no issues found |
+| **`compute.sql-linux.tf`** | VM resource definition | e2-standard-2 instance; attaches persistent disk; can be commented out for VM destruction |
+| **`firewall.tf`** | Firewall rules | **IAP-only mode** - no public SSH/SQL; tunnel required for access |
 | **`github-actions-sa.tf`** | GitHub Actions service account | Admin roles for Terraform and SSH; IAP tunnel access |
-| **`vm-runtime-sa.tf`** | VM runtime service account | Secret Manager access for SQL passwords |
+| **`vm-runtime-sa.tf`** | VM runtime service account | Logging and monitoring permissions for VM |
 | **`vpc.tf`** | Network infrastructure | Custom VPC with subnet for SQL Server VM |
 | **`vm-prep.sh.tftpl`** | VM initialization | Installs Docker, mounts persistent disk at `/mnt/sqldata/mssql/{data,log,secrets}` |
-| **`vm-startup.sh`** | SQL deployment script | Deployed via SSH; pulls SQL Server image, configures volumes, starts container |
+| **`vm-startup.sh`** | SQL deployment script | Deployed via IAP; pulls SQL Server image, configures volumes, starts container |
 | **`init-database.sql`** | Database initialization | Creates DemoDB, sample tables (Customers, Products, Orders), and ci_user |
+| **`sql-tunnel-iap.ps1`** | SQL IAP tunnel (⭐ RECOMMENDED) | Creates localhost:51433 tunnel; works from any IP; no firewall maintenance! |
+| **`ssh-iap.ps1`** | SSH via IAP | Connect to VM from any IP address |
+| **`enable-sql-public-access.ps1`** | Enable public SQL access | Temporary firewall rule for troubleshooting |
+| **`disable-sql-public-access.ps1`** | Disable public SQL access | Remove temporary firewall rule |
+| **`test-sql-connection.ps1`** | Test SQL connection | Verify tunnel connectivity before connecting |
 | **`check-branch-status.ps1`** | Git branch status checker (PowerShell) | Compare branches, show ahead/behind commits, provide sync suggestions |
 | **`check-branch-status.sh`** | Git branch status checker (bash) | Cross-platform branch comparison with color-coded output |
 | **`BRANCH_STATUS.md`** | Branch status documentation | Usage guide and examples for branch status scripts |
+| **`IAP-ACCESS-GUIDE.md`** | IAP access documentation | Complete guide to IAP tunneling and IAP-only access mode |
+| **`DEPLOYMENT_READY.md`** | Infrastructure status | Deployment guide and current status |
 | **`CHANGELOG.md`** | Version history | Detailed accomplishments, issues resolved, lessons learned |
 | **`TROUBLESHOOTING.md`** | Issue resolution guide | Common problems with step-by-step solutions |
 
@@ -899,14 +1010,19 @@ size = 200       # Increase size for more throughput
 |----------|-------|------|
 | **VM (e2-standard-2)** | 730 hours/month | ~$49/month |
 | **VM (e2-standard-2)** | 8 hours/day (tear down) | ~$13/month |
-| **Persistent Disk (SSD)** | 100GB | ~$17/month |
+| **Persistent Disk (SSD)** | 130GB | ~$22/month |
 | **Static IP (allocated)** | Always | ~$7/month |
 | **Static IP (in-use)** | Free when VM running | $0 |
 
 **Tear Down Strategy:**
 - Destroy VM when not in use: **Save up to $36/month**
-- Persistent disk always charged: **$17/month fixed**
+- Persistent disk always charged: **$22/month fixed**
 - Static IP small fee: **~$7/month** (ensures stable IP)
+
+**IAP-Only Access Benefits:**
+- ✅ No IP changes = No terraform reapplies
+- ✅ Works from any network location
+- ✅ More secure than public access
 
 **Spin up for work hours:**
 ```bash
@@ -963,24 +1079,37 @@ gcloud compute scp sql-linux-vm:/mnt/sqldata/data/DemoDB.bak ./DemoDB.bak --tunn
 
 ## Next Steps
 
-1. ✅ **Test tear down / spin up cycle**
+1. ✅ **Test IAP tunnel connection**
    ```bash
-   terraform destroy -target=google_compute_instance.sqlvm
-   terraform apply
-   # Run GitHub Actions workflow to deploy SQL Server
+   # Terminal 1: Start tunnel
+   .\sql-tunnel-iap.ps1
+   
+   # Terminal 2: Connect with SSMS
+   # Server: localhost,51433
+   # User: ci_user
    ```
 
-2. ✅ **Verify data persistence**
+2. ✅ **Test tear down / spin up cycle**
+   ```bash
+   # Insert test data
+   # Tear down VM: .\teardown.ps1 or comment out VM resource in compute.sql-linux.tf
+   # Spin up VM: .\spinup.ps1 or uncomment VM resource
+   # Run GitHub Actions workflow to deploy SQL Server
+   # Verify data still exists via IAP tunnel
+   ```
+
+3. ✅ **Verify data persistence**
    - Insert test data
    - Tear down VM
    - Spin up VM
+   - Deploy SQL via GitHub Actions
    - Verify data still exists
 
-3. 🔄 **Set up scheduled deployments** (optional)
+4. 🔄 **Set up scheduled deployments** (optional)
    - Add `schedule` trigger to workflow for auto-deploy
    - Example: Deploy every weekday at 8 AM
 
-4. 🔐 **Rotate passwords** (recommended quarterly)
+5. 🔐 **Rotate passwords** (recommended quarterly)
    - Update GitHub Secrets
    - Update `terraform.tfvars`
    - Run GitHub Actions workflow
@@ -989,14 +1118,22 @@ gcloud compute scp sql-linux-vm:/mnt/sqldata/data/DemoDB.bak ./DemoDB.bak --tunn
 
 ## Security Best Practices
 
-- ✅ Use IAP tunnel instead of public SSH
+- ✅ **IAP-only access** - No public SSH or SQL exposure
+- ✅ Connect from any IP without firewall maintenance
 - ✅ Service account with minimal permissions
 - ✅ SQL passwords stored in GitHub Secrets (encrypted)
-- ✅ Firewall rules restrict SQL port to your IP only
-- ✅ Enable OS Login for better audit logging
+- ✅ Metadata-based SSH (OS Login disabled for simpler CI/CD)
+- ✅ VM uses dedicated service account (not default compute SA)
 - 🔄 Rotate service account keys every 90 days
 - 🔄 Enable Cloud Audit Logs for compliance
 - 🔄 Use Workload Identity Federation for GitHub Actions (eliminates key management)
+
+**To enable temporary public SQL access** (when IAP has issues):
+```powershell
+.\enable-sql-public-access.ps1  # Creates temp firewall rule
+# Do your work
+.\disable-sql-public-access.ps1  # Removes temp firewall rule
+```
 
 ---
 
@@ -1014,10 +1151,10 @@ gcloud compute scp sql-linux-vm:/mnt/sqldata/data/DemoDB.bak ./DemoDB.bak --tunn
 
 ---
 
-**Version:** 2.0.0  
-**Last Updated:** November 2, 2025  
+**Version:** 2.1.0  
+**Last Updated:** November 10, 2025  
 **Project:** demo-gcp-terraform  
-**Status:** ✅ **Production Ready** - All features tested and verified
+**Status:** ✅ **Production Ready** - IAP-only access mode, VM lifecycle management, persistent storage
 
 For detailed version history, see [CHANGELOG.md](./CHANGELOG.md)
 
@@ -1026,3 +1163,12 @@ For detailed version history, see [CHANGELOG.md](./CHANGELOG.md)
 ## 👥 Contributors
 
 This project was developed and tested with assistance from GitHub Copilot AI.
+
+## 🌟 Key Highlights
+
+- **🔒 IAP-Only Access**: Connect from ANY IP without firewall maintenance
+- **💾 Persistent Storage**: 130GB SSD with data survival across VM rebuilds  
+- **🔄 Lifecycle Management**: Easy tear-down/spin-up with PowerShell scripts
+- **🤖 Automated Deployment**: GitHub Actions with IAP tunneling
+- **💰 Cost Optimized**: Pay only when VM is running (~$36/month savings)
+- **🔐 Secure by Default**: No public SSH/SQL exposure, IAP-managed authentication
