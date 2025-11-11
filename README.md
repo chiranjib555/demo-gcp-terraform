@@ -744,7 +744,7 @@ graph TD
     
     E --> N{Trigger type?}
     N -->|Auto| O[QODO_ENABLED=true]
-    N -->|Comment| P[/review command]
+    N -->|Comment| P[review command]
     N -->|Manual| Q[workflow_dispatch]
     O --> R[Qodo reviews PR]
     P --> R
