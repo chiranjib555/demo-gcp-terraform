@@ -32,7 +32,7 @@ data "google_compute_image" "ubuntu" {
 # VM RESOURCE COMMENTED OUT - VM will be destroyed
 # To recreate the VM, uncomment the resource below
 # ==============================================================================
-r# resource "google_compute_instance" "sqlvm" {
+# resource "google_compute_instance" "sqlvm" {
 #   name         = "sql-linux-vm"
 #   machine_type = "e2-standard-2" # adjust if needed
 #   zone         = var.zone
